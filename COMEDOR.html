@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Huaraches La 18 | Comedor</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700;900&display=swap');
+        body { font-family: 'Poppins', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes fade-in-down { 0% { opacity: 0; transform: translateY(-20px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes slide-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+        .animate-slide-up { animation: slide-up 0.4s ease-out forwards; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-800 min-h-screen text-lg"> <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- 🔴 CONEXIÓN SUPABASE 🔴 ---
+        const SUPABASE_URL = 'https://uzpinrjzbucoihxuvdvm.supabase.co'; 
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6cGlucmp6YnVjb2loeHV2ZHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxNzEyNDgsImV4cCI6MjA3OTc0NzI0OH0.1bIIem8dU3VN-A8AH81smAt584zUD-Yf977MSUIEP2w';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- CONFIG Y DATOS ---
+        const CONFIG = { storeName: "HUARACHES LA 18", totalMesas: 12 };
+
+        const MENU_DATA = [
+            { category: "Huaraches", items: [{name:"Sencillo",price:35},{name:"Con Quesillo",price:70},{name:"Con Huevo",price:45,quesilloExtra:40},{name:"Con Bistec",price:75,quesilloExtra:20},{name:"Con Costilla",price:80,quesilloExtra:20}] },
+            { category: "Sopes", items: [{name:"Sencillo",price:35},{name:"Con Quesillo",price:60},{name:"Con Bistec",price:65,quesilloExtra:10}] },
+            { category: "Bebidas", items: [{name:"Coca Cola 600ml",price:26},{name:"Agua Fresca 1L",price:30}] }
+            // ... (Puedes pegar aquí el resto de tu MENU_DATA completo)
+        ];
+        
+        // *Simulando datos completos para el ejemplo si no copiaste todo el array*
+        if(MENU_DATA.length < 5) {
+             // Agrego algunos datos dummy si el usuario copió corto, para que funcione visualmente
+             MENU_DATA.push({category: "Tacos", items: [{name:"Suadero",price:30},{name:"Pastor",price:30}]});
+        }
+
+        // --- ÍCONOS ---
+        const Icon = ({ d, size = 24 }) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg>;
+        const Icons = {
+            Plus: (p) => <Icon d="M12 5v14M5 12h14" {...p}/>,
+            Minus: (p) => <Icon d="M5 12h14" {...p}/>,
+            Table: (p) => <Icon d="M3 3h18v18H3zM3 9h18M9 21V9" {...p}/>, // Icono simple de mesa
+            Check: (p) => <Icon d="M20 6L9 17l-5-5" {...p}/>,
+            Back: (p) => <Icon d="M19 12H5M12 19l-7-7 7-7" {...p}/>
+        };
+
+        // --- COMPONENTES ---
+
+        const ProductItem = ({ item, category, onAdd }) => {
+            const [quesillo, setQuesillo] = useState(false);
+            const price = (quesillo && item.quesilloExtra) ? item.price + item.quesilloExtra : item.price;
+            
+            return (
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-between h-full">
+                    <div>
+                        <h3 className="font-bold text-gray-900 leading-tight">{item.name}</h3>
+                        <p className="text-orange-600 font-bold">${price}</p>
+                        {item.quesilloExtra && (
+                            <label className="flex items-center gap-2 mt-2 text-sm bg-orange-50 p-1 rounded">
+                                <input type="checkbox" checked={quesillo} onChange={()=>setQuesillo(!quesillo)} className="accent-orange-600"/>
+                                +Quesillo (${item.quesilloExtra})
+                            </label>
+                        )}
+                    </div>
+                    <button onClick={() => onAdd({...item, price, isExtra: quesillo, name: item.name + (quesillo ? ' c/Quesillo' : '')})} 
+                        className="mt-3 bg-orange-500 text-white w-full py-2 rounded-lg font-bold active:scale-95 transition-transform">
+                        Agregar
+                    </button>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [view, setView] = useState('mesas'); // 'mesas' | 'menu' | 'pagar'
+            const [selectedTable, setSelectedTable] = useState(null); // ID de la mesa (1-12)
+            const [activeAccount, setActiveAccount] = useState(null); // Datos de Supabase de la cuenta activa
+            
+            const [cart, setCart] = useState([]); // Productos NUEVOS a agregar
+            const [activeTables, setActiveTables] = useState({}); // Mapa de mesas ocupadas { 1: {total: 100, cliente: 'Juan'}, ... }
+            
+            const [customerName, setCustomerName] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            // 1. CARGAR MESAS EN TIEMPO REAL
+            useEffect(() => {
+                const fetchTables = async () => {
+                    const { data, error } = await supabase.from('cuentas').select('*').eq('estado', 'abierta');
+                    if (data) {
+                        const mapping = {};
+                        data.forEach(cuenta => mapping[cuenta.mesa_numero] = cuenta);
+                        setActiveTables(mapping);
+                    }
+                };
+
+                fetchTables();
+
+                const channel = supabase.channel('mesas-realtime')
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'cuentas' }, (payload) => {
+                        fetchTables(); // Recargar todas al haber cambios (simple y seguro)
+                    })
+                    .subscribe();
+
+                return () => supabase.removeChannel(channel);
+            }, []);
+
+            // 2. SELECCIONAR MESA
+            const handleTableClick = (mesaNum) => {
+                const existingAccount = activeTables[mesaNum];
+                setSelectedTable(mesaNum);
+                setCart([]); // Limpiar carrito local
+
+                if (existingAccount) {
+                    setActiveAccount(existingAccount);
+                    setCustomerName(existingAccount.cliente_nombre || '');
+                    alert(`Mesa ${mesaNum} ocupada por ${existingAccount.cliente_nombre || 'Cliente'}. \nPuedes agregar más productos.`);
+                } else {
+                    setActiveAccount(null);
+                    setCustomerName('');
+                }
+                setView('menu');
+            };
+
+            // 3. AGREGAR AL CARRITO LOCAL
+            const addToCart = (product) => {
+                setCart(prev => [...prev, { ...product, idTemp: Date.now() }]);
+            };
+
+            const removeFromCart = (idTemp) => {
+                setCart(prev => prev.filter(item => item.idTemp !== idTemp));
+            };
+
+            // 4. ENVIAR PEDIDO (Guardar/Actualizar)
+            const sendOrder = async () => {
+                if (cart.length === 0) return alert("Selecciona productos primero");
+                setLoading(true);
+
+                let newItems = cart;
+                let newTotal = cart.reduce((sum, i) => sum + i.price, 0);
+
+                if (activeAccount) {
+                    // ACTUALIZAR cuenta existente
+                    const updatedItems = [...activeAccount.items, ...newItems];
+                    const updatedTotal = parseFloat(activeAccount.total) + newTotal;
+
+                    const { error } = await supabase.from('cuentas')
+                        .update({ items: updatedItems, total: updatedTotal })
+                        .eq('id', activeAccount.id);
+                    
+                    if (!error) alert("✅ Productos agregados a la mesa");
+                } else {
+                    // CREAR nueva cuenta
+                    const { error } = await supabase.from('cuentas').insert([{
+                        mesa_numero: selectedTable,
+                        cliente_nombre: customerName || 'Cliente General',
+                        items: newItems,
+                        total: newTotal,
+                        estado: 'abierta'
+                    }]);
+                    if (!error) alert("✅ Mesa abierta correctamente");
+                }
+
+                setLoading(false);
+                setView('mesas'); // Volver al mapa
+            };
+
+            // 5. CERRAR CUENTA
+            const closeAccount = async (metodo) => {
+                if (!activeAccount) return;
+                if (!confirm(`¿Cerrar mesa ${selectedTable} con pago en ${metodo}?`)) return;
+
+                setLoading(true);
+                const { error } = await supabase.from('cuentas')
+                    .update({ estado: 'pagada', metodo_pago: metodo })
+                    .eq('id', activeAccount.id);
+
+                if (!error) {
+                    alert("💰 Cuenta cerrada y mesa liberada");
+                    setView('mesas');
+                }
+                setLoading(false);
+            };
+
+            // --- VISTAS ---
+
+            // VISTA 1: MAPA DE MESAS
+            if (view === 'mesas') {
+                return (
+                    <div className="p-4 max-w-4xl mx-auto">
+                        <header className="mb-6 flex justify-between items-center text-white">
+                            <h1 className="text-2xl font-black text-orange-500">{CONFIG.storeName}</h1>
+                            <span className="text-sm bg-gray-800 px-3 py-1 rounded-full border border-gray-700">Estado: En Vivo 🟢</span>
+                        </header>
+                        
+                        <div className="grid grid-cols-3 md:grid-cols-4 gap-4">
+                            {Array.from({ length: CONFIG.totalMesas }, (_, i) => i + 1).map(num => {
+                                const isOccupied = activeTables[num];
+                                return (
+                                    <button key={num} onClick={() => handleTableClick(num)}
+                                        className={`h-32 rounded-2xl flex flex-col items-center justify-center p-2 transition-all shadow-lg border-2 relative
+                                        ${isOccupied 
+                                            ? 'bg-red-900/80 border-red-500 text-red-100' 
+                                            : 'bg-green-900/40 border-green-500 text-green-100 hover:bg-green-800'}`}>
+                                        
+                                        <span className="text-3xl font-bold mb-1">{num}</span>
+                                        <span className="text-xs uppercase font-bold tracking-wider">{isOccupied ? 'OCUPADA' : 'LIBRE'}</span>
+                                        
+                                        {isOccupied && (
+                                            <div className="mt-2 bg-black/40 px-2 py-1 rounded text-xs text-center w-full">
+                                                <p className="truncate font-bold">{isOccupied.cliente_nombre}</p>
+                                                <p className="text-yellow-400 font-mono">${isOccupied.total}</p>
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                );
+            }
+
+            // VISTA 2: MENÚ Y DETALLE DE MESA
+            const existingTotal = activeAccount ? parseFloat(activeAccount.total) : 0;
+            const currentTotal = cart.reduce((sum, item) => sum + item.price, 0);
+            const grandTotal = existingTotal + currentTotal;
+
+            return (
+                <div className="pb-32 bg-gray-100 min-h-screen">
+                    {/* Header Mesa */}
+                    <div className="bg-gray-900 text-white p-4 sticky top-0 z-50 flex items-center justify-between shadow-lg">
+                        <button onClick={() => setView('mesas')} className="p-2 bg-gray-700 rounded-full"><Icons.Back size={20}/></button>
+                        <div className="text-center">
+                            <h2 className="text-xl font-bold">Mesa {selectedTable}</h2>
+                            <p className="text-xs text-gray-400">{activeAccount ? 'Cuenta Abierta' : 'Nueva Cuenta'}</p>
+                        </div>
+                        <div className="w-10"></div>
+                    </div>
+
+                    <div className="p-4 max-w-4xl mx-auto">
+                        
+                        {/* Datos Cliente (Solo si es nueva) */}
+                        {!activeAccount && (
+                            <div className="bg-white p-4 rounded-xl shadow-sm mb-6 border border-gray-200">
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Nombre del Cliente (Opcional)</label>
+                                <input type="text" placeholder="Ej: Familia Perez" value={customerName} onChange={e=>setCustomerName(e.target.value)}
+                                    className="w-full p-3 bg-gray-50 border rounded-lg text-lg outline-none focus:ring-2 focus:ring-orange-500"/>
+                            </div>
+                        )}
+
+                        {/* Productos ya pedidos (Solo lectura) */}
+                        {activeAccount && activeAccount.items.length > 0 && (
+                            <div className="mb-6 opacity-75 grayscale-[0.5]">
+                                <h3 className="font-bold text-gray-600 mb-2 text-sm uppercase">Ya pedido (Cocina):</h3>
+                                <div className="bg-gray-200 rounded-xl p-4 space-y-2">
+                                    {activeAccount.items.map((item, idx) => (
+                                        <div key={idx} className="flex justify-between text-sm text-gray-700 border-b border-gray-300 pb-1 last:border-0">
+                                            <span>{item.name}</span>
+                                            <span className="font-mono">${item.price}</span>
+                                        </div>
+                                    ))}
+                                    <div className="flex justify-between font-bold text-gray-900 pt-2">
+                                        <span>Subtotal Anterior:</span>
+                                        <span>${existingTotal}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Menú para agregar NUEVOS productos */}
+                        <div className="space-y-6">
+                            <h3 className="font-bold text-gray-800 text-lg border-l-4 border-orange-500 pl-3">Agregar Productos</h3>
+                            {MENU_DATA.map(cat => (
+                                <div key={cat.category}>
+                                    <h4 className="text-sm font-bold text-gray-500 uppercase mb-2">{cat.category}</h4>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {cat.items.map((item, idx) => (
+                                            <ProductItem key={idx} item={item} category={cat.category} onAdd={addToCart} />
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* BARRA INFERIOR DE ACCIONES */}
+                    <div className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 shadow-2xl z-50">
+                        <div className="max-w-4xl mx-auto">
+                            {/* Resumen Carrito Actual */}
+                            {cart.length > 0 && (
+                                <div className="mb-4 bg-orange-50 p-3 rounded-lg border border-orange-100 max-h-32 overflow-y-auto">
+                                    <p className="text-xs font-bold text-orange-800 mb-1">NUEVOS ÍTEMS POR AGREGAR:</p>
+                                    {cart.map(item => (
+                                        <div key={item.idTemp} className="flex justify-between items-center text-sm mb-1">
+                                            <span className="text-gray-800">{item.name}</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold">${item.price}</span>
+                                                <button onClick={()=>removeFromCart(item.idTemp)} className="text-red-500"><Icons.Minus size={16}/></button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            <div className="flex justify-between items-end mb-4">
+                                <div>
+                                    <p className="text-sm text-gray-500">Total Acumulado</p>
+                                    <p className="text-3xl font-black text-gray-900">${grandTotal.toFixed(2)}</p>
+                                </div>
+                                {cart.length > 0 && (
+                                    <button onClick={sendOrder} disabled={loading} 
+                                        className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold shadow-lg hover:bg-green-700 animate-pulse">
+                                        {activeAccount ? '➕ AGREGAR A CUENTA' : '✅ ABRIR MESA'}
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Botones de Cerrar Cuenta (Solo si hay cuenta activa y no hay carrito pendiente) */}
+                            {activeAccount && cart.length === 0 && (
+                                <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t">
+                                    <button onClick={() => closeAccount('Efectivo')} className="bg-gray-800 text-white py-3 rounded-lg font-bold text-sm">
+                                        💵 PAGAR EFECTIVO
+                                    </button>
+                                    <button onClick={() => closeAccount('Tarjeta')} className="bg-blue-800 text-white py-3 rounded-lg font-bold text-sm">
+                                        💳 PAGAR TARJETA
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

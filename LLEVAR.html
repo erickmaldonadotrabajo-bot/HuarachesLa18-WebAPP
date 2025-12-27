@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Huaraches La 18 | Menú Digital</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700;900&display=swap');
+        body { font-family: 'Poppins', sans-serif; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        @keyframes fade-in-down { 0% { opacity: 0; transform: translateY(-20px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes slide-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 15px rgba(255, 140, 0, 0.5); } 50% { box-shadow: 0 0 25px rgba(255, 140, 0, 0.8); } }
+        .animate-fade-in-down { animation: fade-in-down 0.3s ease-out forwards; }
+        .animate-slide-up { animation: slide-up 0.4s ease-out forwards; }
+        .animate-pulse-glow { animation: pulse-glow 2s infinite; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-800 min-h-screen text-lg"> <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- 🔴 CONEXIÓN SUPABASE 🔴 ---
+        const SUPABASE_URL = 'https://uzpinrjzbucoihxuvdvm.supabase.co'; 
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6cGlucmp6YnVjb2loeHV2ZHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxNzEyNDgsImV4cCI6MjA3OTc0NzI0OH0.1bIIem8dU3VN-A8AH81smAt584zUD-Yf977MSUIEP2w';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // --- ÍCONOS ---
+        const Icon = ({ d, size = 28, className = "" }) => (<svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d={d} /></svg>);
+        const Icons = {
+            Cart: (p) => <svg {...p} width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>,
+            Check: (p) => <Icon {...p} d="M20 6L9 17l-5-5" />,
+            Plus: (p) => <Icon {...p} d="M12 5v14M5 12h14" />,
+            Minus: (p) => <Icon {...p} d="M5 12h14" />,
+            Send: (p) => <svg {...p} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>,
+            Info: (p) => <svg {...p} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>,
+            Cash: (p) => <svg {...p} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><line x1="12" y1="7" x2="12" y2="21"></line><path d="M16.5 13.5h.01"></path><path d="M7.5 13.5h.01"></path></svg>,
+            Phone: (p) => <svg {...p} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>,
+            Card: (p) => <svg {...p} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect><line x1="1" y1="10" x2="23" y2="10"></line></svg>
+        };
+
+        const CONFIG = {
+            storeName: "HUARACHES LA 18",
+            phone: "5215625264945", 
+            assets: { logo: "/navidad.jpg", background: "/catrina1.jpg" }
+        };
+
+        // --- MENÚ ---
+        const MENU_DATA = [
+            {
+                category: "Huaraches", prepNote: "Con cebolla y queso rallado",
+                items: [
+                    { name: "Sencillo", price: 35, hasQuesillo: false },
+                    { name: "Con Quesillo", price: 70, hasQuesillo: false },
+                    { name: "Con Huevo", price: 45, quesilloExtra: 40 },
+                    { name: "Con Chicharron", price: 75, quesilloExtra: 20 },
+                    { name: "Con Tinga Pollo", price: 75, quesilloExtra: 20 },
+                    { name: "Con Tinga Res", price: 80, quesilloExtra: 20 },
+                    { name: "Con Bistec", price: 75, quesilloExtra: 20 },
+                    { name: "Con Suadero", price: 75, quesilloExtra: 20 },
+                    { name: "Con Pastor", price: 75, quesilloExtra: 20 },
+                    { name: "Con Cochinita", price: 80, quesilloExtra: 20 }
+                ]
+            },
+            {
+                category: "Sopes", prepNote: "Con cebolla, queso y lechuga",
+                items: [
+                    { name: "Sencillo", price: 35, hasQuesillo: false },
+                    { name: "Con Quesillo", price: 60, hasQuesillo: false },
+                    { name: "Con Huevo", price: 45, quesilloExtra: 15 },
+                    { name: "Con Chicharron", price: 65, quesilloExtra: 10 },
+                    { name: "Con Tinga Pollo", price: 65, quesilloExtra: 10 },
+                    { name: "Con Tinga Res", price: 70, quesilloExtra: 10 },
+                    { name: "Con Bistec", price: 65, quesilloExtra: 10 },
+                    { name: "Con Suadero", price: 65, quesilloExtra: 10 },
+                    { name: "Con Longaniza", price: 65, quesilloExtra: 10 },
+                    { name: "Con Pastor", price: 65, quesilloExtra: 10 },
+                    { name: "Con Cochinita", price: 70, quesilloExtra: 10 }
+                ]
+            },
+            {
+                category: "Tacos", prepNote: "Con cebolla y cilantro",
+                items: [
+                    { name: "Suadero", price: 30, quesilloExtra: 5 },
+                    { name: "Pastor", price: 30, quesilloExtra: 5 },
+                    { name: "Bistec", price: 30, quesilloExtra: 5 },
+                    { name: "Longaniza", price: 30, quesilloExtra: 5 },
+                    { name: "Campechano", price: 30, quesilloExtra: 5 }
+                ]
+            },
+            {
+                category: "Gorditas", prepNote: "Con cebolla y queso rallado",
+                items: [
+                    { name: "Sencilla", price: 35, hasQuesillo: false },
+                    { name: "Con Quesillo", price: 45, hasQuesillo: false },
+                    { name: "Con Tinga Pollo", price: 65, quesilloExtra: 10 },
+                    { name: "Con Tinga Res", price: 70, quesilloExtra: 10 },
+                    { name: "Con Bistec", price: 65, quesilloExtra: 10 },
+                    { name: "Con Suadero", price: 65, quesilloExtra: 10 },
+                    { name: "Con Pastor", price: 65, quesilloExtra: 10 },
+                    { name: "Campechana", price: 65, quesilloExtra: 10 },
+                    { name: "Con Longaniza", price: 65, quesilloExtra: 10 },
+                    { name: "Con Cochinita", price: 70, quesilloExtra: 10 }
+                ]
+            },
+            {
+                category: "Quesadillas", prepNote: "Con lechuga y queso",
+                items: [
+                    { name: "De Quesillo", price: 25, hasQuesillo: false },
+                    { name: "De Chicharron", price: 25, quesilloExtra: 5 },
+                    { name: "De Hongos", price: 25, quesilloExtra: 5 },
+                    { name: "De Papa/Longaniza", price: 25, quesilloExtra: 5 },
+                    { name: "De Tinga Pollo", price: 25, quesilloExtra: 5 },
+                    { name: "De Tinga Res", price: 27, quesilloExtra: 5 },
+                    { name: "De Cochinita", price: 30, quesilloExtra: 5 }
+                ]
+            },
+            {
+                category: "Pambazos", prepNote: "Crema, queso y lechuga",
+                items: [
+                    { name: "De Chicharron", price: 30, quesilloExtra: 10 },
+                    { name: "De Papa/Longaniza", price: 30, quesilloExtra: 10 },
+                    { name: "De Tinga Pollo", price: 30, quesilloExtra: 10 },
+                    { name: "De Tinga Res", price: 35, quesilloExtra: 10 },
+                    { name: "De Bistec", price: 40, quesilloExtra: 10 },
+                    { name: "De Suadero", price: 40, quesilloExtra: 10 },
+                    { name: "De Pastor", price: 40, quesilloExtra: 10 },
+                    { name: "De Cochinita", price: 40, quesilloExtra: 10 }
+                ]
+            },
+            {
+                category: "Tortas", prepNote: "Con cebolla y cilantro",
+                items: [
+                    { name: "De Bistec", price: 70 },
+                    { name: "De Suadero", price: 70 },
+                    { name: "De Pastor", price: 70 },
+                    { name: "De Cochinita", price: 75 },
+                    { name: "Campechana", price: 70 }
+                ]
+            },
+            {
+                category: "Tostadas", prepNote: "Crema, queso y lechuga",
+                items: [
+                    { name: "De Pata", price: 30 },
+                    { name: "De Tinga Pollo", price: 30 },
+                    { name: "De Tinga Res", price: 35 },
+                    { name: "De Cochinita", price: 35 }
+                ]
+            },
+            {
+                category: "Burritos y Costras", prepNote: "Guarnición de nopales",
+                items: [
+                    { name: "Burrito Bistec", price: 75, prepNote: "Nopales y pepinos" },
+                    { name: "Burrito Suadero", price: 75, prepNote: "Nopales y pepinos" },
+                    { name: "Burrito Pastor", price: 75, prepNote: "Nopales y pepinos" },
+                    { name: "Burrito Cochinita", price: 80, prepNote: "Nopales y pepinos" },
+                    { name: "Burrito Campechano", price: 75, prepNote: "Nopales y pepinos" },
+                    { name: "Burrito Longaniza", price: 75, prepNote: "Nopales y pepinos" },
+                    { name: "Costra Bistec", price: 40, prepNote: "Cebolla, cilantro, nopales" },
+                    { name: "Costra Suadero", price: 40, prepNote: "Cebolla, cilantro, nopales" },
+                    { name: "Costra Pastor", price: 40, prepNote: "Cebolla, cilantro, nopales" },
+                    { name: "Costra Longaniza", price: 40, prepNote: "Cebolla, cilantro, nopales" },
+                    { name: "Costra Cochinita", price: 40, prepNote: "Cebolla, cilantro, nopales" }
+                ]
+            },
+            {
+                category: "Bebidas",
+                items: [
+                    { name: "Ponche 1L", price: 35 },
+                    { name: "Ponche 1/2L", price: 20 },
+                    { name: "Agua Jamaica 1L", price: 25 },
+                    { name: "Agua Jamaica 1/2L", price: 15 },
+                    { name: "Agua Horchata 1L", price: 30 },
+                    { name: "Agua Horchata 1/2L", price: 17 },
+                    { name: "Coca Cola 600ml", price: 26 },
+                    { name: "Coca Cola 3L", price: 50 },
+                    { name: "Coca Cola 1.75L", price: 42 }
+                ]
+            }
+        ];
+
+        const Button = ({ onClick, children, variant = "primary", className = "", disabled = false, icon: IconComp }) => {
+            const variants = {
+                primary: "bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg shadow-orange-500/40 active:scale-95 hover:brightness-110",
+                secondary: "bg-gray-800 text-white hover:bg-gray-700",
+            };
+            return (
+                <button onClick={onClick} disabled={disabled} className={`px-4 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all text-base ${variants[variant]} ${className}`}>
+                    {IconComp && <IconComp size={24} />} {children}
+                </button>
+            );
+        };
+
+        const ProductItem = ({ item, category, onAdd }) => {
+            const [withQuesillo, setWithQuesillo] = useState(false);
+            const [conTodo, setConTodo] = useState(true);
+            const [exclusions, setExclusions] = useState({});
+
+            const hasExtra = item.quesilloExtra !== undefined && item.quesilloExtra > 0;
+            const currentPrice = hasExtra && withQuesillo ? item.price + item.quesilloExtra : item.price;
+
+            const availableToppings = useMemo(() => {
+                if (category === 'Bebidas') return [];
+                if (category === 'Huaraches' || category === 'Gorditas') return ['Cebolla', 'Queso'];
+                if (category === 'Sopes') return ['Cebolla', 'Queso', 'Lechuga'];
+                if (category === 'Tostadas' || category === 'Pambazos') return ['Queso', 'Crema', 'Lechuga'];
+                if (category === 'Tortas') return ['Cebolla', 'Cilantro'];
+                if (category === 'Tacos') return ['Cebolla', 'Cilantro', 'Nopales'];
+                if (category === 'Quesadillas') return ['Lechuga', 'Queso'];
+                if (category === 'Burritos y Costras') {
+                    if (item.name.includes('Costra')) return ['Cebolla', 'Cilantro', 'Nopales'];
+                    return ['Nopales', 'Pepinos']; 
+                }
+                return [];
+            }, [category, item.name]);
+
+            useEffect(() => {
+                setConTodo(true);
+                setExclusions({});
+            }, [item]);
+
+            const toggleConTodo = () => {
+                if (!conTodo) {
+                    setConTodo(true);
+                    setExclusions({}); 
+                } 
+            };
+
+            const toggleExclusion = (topping) => {
+                const newState = !exclusions[topping];
+                const newExclusions = { ...exclusions, [topping]: newState };
+                
+                setExclusions(newExclusions);
+
+                if (newState) {
+                    setConTodo(false);
+                } else {
+                    const anyExcluded = Object.values(newExclusions).some(val => val === true);
+                    if (!anyExcluded) setConTodo(true);
+                }
+            };
+
+            const handleAdd = () => {
+                let details = "";
+                
+                const activeExclusions = Object.entries(exclusions)
+                    .filter(([_, isExcluded]) => isExcluded)
+                    .map(([name]) => name);
+
+                if (availableToppings.length === 0) {
+                    details = ""; 
+                } else if (conTodo) {
+                    details = " (Con Todo)";
+                } else if (activeExclusions.length === availableToppings.length) {
+                    details = " (SIN NADA)";
+                } else if (activeExclusions.length > 0) {
+                    details = ` (SIN ${activeExclusions.join(', SIN ')})`;
+                } else {
+                    details = " (Con Todo)"; 
+                }
+                
+                // --- 🟢 CORRECCIÓN: CONSTRUIR NOMBRE COMPLETO ---
+                let fullName = item.name;
+                // Mapa para singularizar categorías
+                const categoryPrefixes = {
+                    'Huaraches': 'Huarache',
+                    'Sopes': 'Sope',
+                    'Gorditas': 'Gordita',
+                    'Quesadillas': 'Quesadilla',
+                    'Pambazos': 'Pambazo',
+                    'Tacos': 'Taco',
+                    'Tortas': 'Torta',
+                    'Tostadas': 'Tostada'
+                };
+
+                // Si la categoría está en el mapa, agregamos el prefijo
+                if (categoryPrefixes[category]) {
+                    fullName = `${categoryPrefixes[category]} ${item.name}`;
+                }
+                // (Bebidas y Burritos ya tienen el nombre completo en su item.name)
+
+                onAdd({ 
+                    ...item, 
+                    name: fullName, // Usamos el nombre completo aquí
+                    price: currentPrice, 
+                    isExtra: withQuesillo, 
+                    details: details 
+                });
+            };
+
+            return (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 flex flex-col animate-slide-up h-full">
+                    <div className="flex-grow">
+                        <div className="flex flex-col mb-2">
+                            <h3 className="font-bold text-gray-900 text-lg leading-tight mb-1">{item.name}</h3>
+                            <span className="self-start bg-orange-100 text-orange-800 px-2 py-0.5 rounded-lg font-bold text-sm">
+                                ${currentPrice.toFixed(2)}
+                            </span>
+                        </div>
+                        
+                        {availableToppings.length > 0 && (
+                            <div className="mb-3 flex flex-col gap-1.5">
+                                <label className="flex items-center gap-2 text-xs font-bold text-gray-900 cursor-pointer select-none p-1.5 rounded bg-orange-50 border border-orange-200">
+                                    <input type="checkbox" checked={conTodo} onChange={toggleConTodo} 
+                                            className="w-4 h-4 rounded accent-orange-600" />
+                                    Con Todo
+                                </label>
+
+                                <div className="flex flex-wrap gap-1">
+                                    {availableToppings.map(t => (
+                                        <label key={t} className={`flex items-center gap-1 text-[10px] cursor-pointer select-none px-2 py-1 rounded border transition-colors ${exclusions[t] ? 'bg-red-50 border-red-200 text-red-700 font-bold' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
+                                            <input type="checkbox" checked={exclusions[t] || false} onChange={() => toggleExclusion(t)} 
+                                                className="w-3 h-3 rounded accent-red-600" />
+                                            Sin {t}
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {hasExtra && (
+                            <div onClick={() => setWithQuesillo(!withQuesillo)} className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer mb-2 transition-all ${withQuesillo ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-gray-200 bg-gray-50'}`}>
+                                <div className={`w-5 h-5 rounded border flex items-center justify-center ${withQuesillo ? 'bg-orange-500 border-orange-500' : 'bg-white border-gray-400'}`}>
+                                    {withQuesillo && <Icons.Check size={14} className="text-white" />}
+                                </div>
+                                <span className="text-xs font-bold text-gray-800">Quesillo Extra (+${item.quesilloExtra})</span>
+                            </div>
+                        )}
+                    </div>
+                    <div className="mt-auto pt-2">
+                        <Button onClick={handleAdd} className="w-full text-sm py-2" icon={Icons.Plus}>Agregar</Button>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [cart, setCart] = useState([]);
+            const categoryNames = useMemo(() => MENU_DATA.map(c => c.category), []);
+            const [activeCategory, setActiveCategory] = useState(categoryNames[0]);
+            const [showCart, setShowCart] = useState(false);
+            const [notification, setNotification] = useState(null);
+            
+            const [customer, setCustomer] = useState({
+                salsa: '', paymentMethod: '', instructions: ''
+            });
+
+            useEffect(() => {
+                const saved = localStorage.getItem('huarachesCartLocal');
+                if (saved) setCart(JSON.parse(saved));
+            }, []);
+            useEffect(() => {
+                localStorage.setItem('huarachesCartLocal', JSON.stringify(cart));
+            }, [cart]);
+
+            const showNotification = (msg) => {
+                setNotification(msg);
+                setTimeout(() => setNotification(null), 3000);
+            };
+
+            const addToCart = (product) => {
+                // Usamos el nombre completo que ya viene modificado desde ProductItem
+                const key = `${product.name}-${product.price}-${product.details}-${product.isExtra}`;
+                setCart(prev => {
+                    const existing = prev.find(p => p.key === key);
+                    return existing 
+                        ? prev.map(p => p.key === key ? { ...p, qty: p.qty + 1 } : p)
+                        : [...prev, { ...product, qty: 1, key }];
+                });
+                const detalleExtra = product.isExtra ? " (+Quesillo)" : "";
+                showNotification(`¡${product.name}${detalleExtra} agregado!`);
+            };
+
+            const updateQty = (key, delta) => {
+                setCart(prev => prev.map(p => p.key === key ? { ...p, qty: Math.max(0, p.qty + delta) } : p).filter(p => p.qty > 0));
+            };
+
+            const totals = useMemo(() => {
+                const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+                return { subtotal, finalTotal: subtotal };
+            }, [cart]);
+
+            const handleCheckout = async () => {
+                if (cart.length === 0) return showNotification("⚠️ El carrito está vacío");
+                
+                if (!customer.salsa || !customer.paymentMethod) {
+                    return showNotification("⚠️ Elige Salsa y Método de Pago");
+                }
+                
+                showNotification("⏳ Procesando pedido...");
+                
+                let msg = `🔥 *NUEVO PEDIDO* 🔥\n\n`;
+                msg += `🌶️ *Salsa:* ${customer.salsa}\n`;
+                msg += `💰 *Pago:* ${customer.paymentMethod.toUpperCase()}\n`;
+                msg += `--------------------------------\n`;
+                
+                cart.forEach(item => {
+                    msg += `*${item.qty}* x *${item.name}* ${item.isExtra ? '(c/Quesillo)' : ''} ${item.details || ''} - $${(item.price * item.qty).toFixed(2)}\n`;
+                });
+                
+                if (customer.instructions) msg += `\n📝 *Notas:* ${customer.instructions}`;
+                msg += `\n--------------------------------\n`;
+                msg += `*💰 TOTAL: $${totals.finalTotal.toFixed(2)}*\n`;
+
+                window.open(`https://wa.me/${CONFIG.phone}?text=${encodeURIComponent(msg)}`, '_blank');
+
+                supabase.from('pedidos').insert([{ 
+                    cliente_nombre: "Cliente Local", 
+                    cliente_telefono: "0000000000",
+                    total: totals.finalTotal,
+                    metodo_pago: customer.paymentMethod,
+                    detalle_json: cart, 
+                }]).then(res => console.log("Guardado"));
+
+                setCart([]);
+                localStorage.removeItem('huarachesCartLocal');
+                setCustomer({ salsa: '', paymentMethod: '', instructions: '' });
+                setShowCart(false);
+            };
+
+            return (
+                <div className="relative min-h-screen bg-gradient-to-br from-yellow-400 via-orange-500 to-red-600 pb-24 text-base">
+                    <div className="fixed inset-0 z-0 bg-cover bg-center opacity-20 mix-blend-overlay pointer-events-none" style={{ backgroundImage: `url(${CONFIG.assets.background})` }} />
+
+                    <header className="bg-black/90 backdrop-blur-md shadow-2xl border-b-4 border-orange-600 rounded-b-3xl mx-auto max-w-2xl px-4 py-4 text-center z-50 relative">
+                        <img src={CONFIG.assets.logo} className="h-20 w-20 rounded-full border-4 border-white shadow-lg mb-2 mx-auto" />
+                        <h1 className="text-xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-400 tracking-widest drop-shadow-sm">
+                            {CONFIG.storeName}
+                        </h1>
+                    </header>
+
+                    <main className="max-w-4xl mx-auto p-4 relative z-10">
+                        {/* Categorías Visibles */}
+                        <div className="sticky top-0 z-40 -mx-4 px-4 py-4 bg-gradient-to-b from-black/30 to-transparent backdrop-blur-sm mb-4">
+                            <div className="flex gap-2 flex-wrap justify-center pb-2">
+                                {MENU_DATA.map(cat => (
+                                    <button key={cat.category} onClick={() => setActiveCategory(cat.category)}
+                                        className={`whitespace-nowrap px-4 py-2 rounded-full font-bold text-sm transition-all transform ${activeCategory === cat.category ? 'bg-white text-orange-600 scale-105 shadow-lg' : 'bg-black/50 text-white border border-white/20'}`}>
+                                        {cat.category}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {MENU_DATA.map(cat => cat.category === activeCategory && (
+                            <div key={cat.category} className="animate-slide-up min-h-[50vh]">
+                                {cat.prepNote && (
+                                    <div className="bg-white/90 backdrop-blur-sm border-l-4 border-orange-500 p-3 rounded-r-lg mb-4 flex items-center gap-2 text-sm shadow-sm">
+                                        <Icons.Info className="text-orange-500 flex-shrink-0" size={20} />
+                                        <p className="italic text-gray-800 font-medium">{cat.prepNote}</p>
+                                    </div>
+                                )}
+                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                    {cat.items.map((item, idx) => (
+                                        <ProductItem key={`${cat.category}-${idx}`} item={item} category={cat.category} onAdd={addToCart} />
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+
+                        <div id="cart" className={`transition-all duration-500 transform ${cart.length > 0 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-20 h-0 overflow-hidden'}`}>
+                            {cart.length > 0 && (
+                                <div className="mt-10 bg-white rounded-3xl shadow-2xl overflow-hidden border-t-4 border-orange-500">
+                                    <div className="bg-gray-900 p-4 flex items-center gap-3 text-white">
+                                        <Icons.Cart className="text-orange-500" size={28} />
+                                        <h2 className="font-bold text-xl">Tu Orden</h2>
+                                    </div>
+                                    
+                                    <div className="p-4 max-h-[400px] overflow-y-auto custom-scrollbar space-y-3">
+                                        {cart.map(item => (
+                                            <div key={item.key} className="flex justify-between items-start bg-gray-50 p-3 rounded-xl border border-gray-200 shadow-sm">
+                                                <div className="flex items-start gap-3">
+                                                    <span className="bg-orange-100 text-orange-800 font-bold w-8 h-8 flex items-center justify-center rounded-lg text-sm flex-shrink-0">{item.qty}</span>
+                                                    <div>
+                                                        <p className="font-bold text-gray-900 text-base leading-tight">{item.name}</p>
+                                                        <p className="text-xs text-gray-600 mt-1">{item.details}</p>
+                                                        <p className="text-sm text-gray-800 font-bold mt-1">${item.price}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    <button onClick={() => updateQty(item.key, 1)} className="p-1 bg-orange-500 text-white rounded shadow-md"><Icons.Plus size={16} /></button>
+                                                    <button onClick={() => updateQty(item.key, -1)} className="p-1 bg-white border rounded text-gray-500 hover:text-red-500"><Icons.Minus size={16} /></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="bg-gray-50 p-6 border-t space-y-4">
+                                        <select value={customer.salsa} onChange={e=>setCustomer({...customer, salsa:e.target.value})}
+                                            className="w-full p-3 bg-white border rounded-xl text-base focus:ring-2 focus:ring-orange-500 outline-none shadow-sm">
+                                            <option value="">🌶️ Elige tu Salsa...</option>
+                                            <option value="Verde">Salsa Verde</option>
+                                            <option value="Roja">Salsa Roja</option>
+                                            <option value="Ambas">Ambas Salsas</option>
+                                            <option value="Sin Salsa">Sin Salsa</option>
+                                        </select>
+
+                                        <textarea className="w-full p-3 bg-white border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-orange-500 outline-none shadow-sm transition-all"
+                                            placeholder="Notas de preparación..." rows="2"
+                                            value={customer.instructions} onChange={e => setCustomer({...customer, instructions: e.target.value})} />
+
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {['efectivo', 'transferencia', 'tarjeta'].map(m => (
+                                                <button key={m} onClick={() => setCustomer({...customer, paymentMethod: m})}
+                                                    className={`py-3 rounded-lg text-xs font-bold uppercase border flex flex-col items-center gap-1 transition-all ${customer.paymentMethod === m ? 'bg-gray-800 text-white scale-105 shadow-lg' : 'bg-white text-gray-600 hover:bg-gray-100'}`}>
+                                                    {m === 'efectivo' && <Icons.Cash size={20} />}
+                                                    {m === 'transferencia' && <Icons.Phone size={20} />}
+                                                    {m === 'tarjeta' && <Icons.Card size={20} />}
+                                                    {m}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {customer.paymentMethod === 'transferencia' && (
+                                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-900 animate-slide-up">
+                                                <p className="flex justify-between"><span>Banco:</span> <span className="font-bold">NU BANK</span></p>
+                                                <p className="flex justify-between"><span>Cuenta:</span> <span className="font-mono font-bold">638180000198739591</span></p>
+                                                <p className="flex justify-between"><span>Titular:</span> <span className="font-bold">ERICK M.</span></p>
+                                            </div>
+                                        )}
+
+                                        <div className="bg-orange-100/50 p-4 rounded-xl border border-orange-200">
+                                            <div className="flex justify-between font-black text-2xl text-gray-900"><span>TOTAL</span><span>${totals.finalTotal.toFixed(2)}</span></div>
+                                        </div>
+
+                                        <Button onClick={handleCheckout} className="w-full py-4 text-lg shadow-xl animate-pulse-glow" icon={Icons.Send}>ENVIAR PEDIDO</Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+                    
+                    {!showCart && (
+                        <button onClick={() => { setShowCart(true); setTimeout(()=>document.getElementById('cart')?.scrollIntoView({behavior:'smooth'}),100); }} 
+                            className="fixed bottom-6 right-6 bg-orange-600 text-white p-4 rounded-full shadow-2xl z-50 hover:scale-110 transition-transform border-4 border-white">
+                            <Icons.Cart size={28}/>
+                            <span className="absolute -top-2 -right-2 bg-red-600 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center border-2 border-white">{cart.reduce((a,c)=>a+c.qty,0)}</span>
+                        </button>
+                    )}
+
+                    {notification && (
+                        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 bg-gray-900/95 backdrop-blur text-white px-6 py-3 rounded-full shadow-2xl z-[100] flex items-center gap-2 text-base font-bold animate-fade-in-down border border-gray-700 whitespace-nowrap">
+                            <div className="bg-green-500 rounded-full p-0.5"><Icons.Check size={16} className="text-white" /></div>
+                            {notification}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
