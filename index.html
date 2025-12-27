@@ -1,0 +1,1024 @@
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#ff8c00">
+<style>
+/* Add these styles to make the salsa selector match other inputs */
+.salsa-section select {
+    width: 100%;
+    padding: 8px;
+    margin: 5px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+body {
+    font-family: 'Poppins', sans-serif;
+    margin: 0;
+    padding: 0;
+    background-image: url('/images.jpeg');
+    background-repeat: repeat;
+    background-size: cover;
+    box-shadow: inset 0 0 100px rgba(255, 107, 107, 0.1);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+}
+
+.header {
+    text-align: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.6); /* Semi-transparent dark overlay */
+    box-shadow: 0 0 20px #ff8c00,  /* Orange neon */
+                0 0 40px #ff8c00;
+}
+
+.header img {
+    max-width: 300px;
+    border-radius: 10px;
+    animation: buzz 1s infinite;
+    box-shadow: 0 0 20px #ff8c00,  /* Orange neon */
+                0 0 40px #ff8c00,
+                0 0 60px #ff8c00;
+}
+
+.welcome {
+    font-family: 'Playfair Display', serif;
+    text-align: center;
+    padding: 30px;
+    background: linear-gradient(45deg, #ffd93d, #ff6b6b, #4ecdc4, #ffd93d);
+    background-size: 300% 300%;
+    font-size: 1.5em;
+    margin-bottom: 20px;
+    animation: gradientMove 10s ease infinite;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    font-weight: 700;
+    box-shadow: 0 0 15px rgba(255, 217, 61, 0.8),
+                0 0 30px rgba(255, 140, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.welcome .top-text {
+    color: white;
+}
+
+.welcome .bottom-text {
+    color: black;
+}
+
+.menu-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+    display: grid;
+    gap: 20px;
+    margin-bottom: 100px;
+    background: rgba(0, 0, 0, 0.7); /* Semi-transparent dark overlay */
+    background: -webkit-linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7));
+    background: -moz-linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.7));
+    border-radius: 15px;
+    box-shadow: 0 0 20px rgba(255, 140, 0, 0.3);
+}
+
+.menu-item {
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+    padding: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1),
+                0 0 15px rgba(255, 140, 0, 0.5);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    0% { transform: translateX(-20px); opacity: 0; }
+    100% { transform: translateX(0); opacity: 1; }
+}
+
+.menu-item:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 12px rgba(0,0,0,0.15),
+                0 0 20px rgba(255, 140, 0, 0.8);
+}
+
+.menu-item h3 {
+    color: #ff6b6b;
+    margin-top: 0;
+}
+
+.price {
+    color: #2ecc71;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
+.prep-note {
+    color: #777;
+    font-style: italic;
+    font-size: 0.9em;
+    margin-top: 8px;
+    margin-bottom: 10px;
+}
+
+.add-button {
+    background-color: #ff6b6b;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    box-shadow: 0 0 10px rgba(255, 107, 107, 0.5);
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.add-button:hover {
+    background-color: #ff4757;
+    box-shadow: 0 0 15px rgba(255, 71, 87, 0.8),
+                0 0 30px rgba(255, 71, 87, 0.5);
+}
+
+.cart-button {
+    position: fixed;
+    right: 20px;
+    bottom: 80px;
+    background-color: #ff8c00; /* Changed from #2ecc71 to orange */
+    color: white;
+    border: none;
+    padding: 15px;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1),
+                0 0 15px rgba(255, 140, 0, 0.8), /* Changed shadow color to match orange */
+                0 0 30px rgba(255, 140, 0, 0.5);
+    z-index: 1000;
+    animation: bounce 2s infinite;
+    font-size: 24px; /* Increased font size for larger emoji */
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
+@keyframes bounce {
+    0%, 100% { -webkit-transform: translateY(0); }
+    50% { -webkit-transform: translateY(-10px); }
+}
+
+.order-summary {
+    margin: 40px auto;
+    padding: 20px;
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1),
+                0 0 20px rgba(255, 140, 0, 0.5);
+    max-width: 800px;
+}
+
+.order-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+}
+
+.order-table th,
+.order-table td {
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+    text-align: left;
+}
+
+.customer-info {
+    margin-top: 20px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+.customer-info input,
+.customer-info select {
+    width: 100%;
+    padding: 8px;
+    margin: 5px 0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.delete-button {
+    background-color: #ff4757;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.category-title {
+    grid-column: 1 / -1;
+    color: #ff6b6b;
+    font-size: 1.5em;
+    margin: 20px 0;
+    text-align: center;
+}
+
+.category-buttons-container {
+    display: flex;
+    gap: 15px;
+    overflow-x: auto;
+    padding: 20px;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+}
+
+.category-buttons-container::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+}
+
+.category-button {
+    background-color: rgba(255, 107, 107, 0.9);
+    color: white;
+    border: none;
+    padding: 15px 25px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 1.1em;
+    white-space: nowrap;
+    transition: transform 0.3s ease, background-color 0.3s ease, box-shadow 0.3s ease;
+    animation: jumpIn 0.5s ease-out;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink: 0;
+}
+
+@keyframes jumpIn {
+    0% { transform: translateY(20px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+.category-button:hover {
+    background-color: #ff4757;
+    transform: translateY(-3px) scale(1.05);
+    box-shadow: 0 5px 15px rgba(255, 107, 107, 0.3),
+                0 0 25px rgba(255, 71, 87, 0.8);
+}
+
+.category-section {
+    display: none;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.category-section.active {
+    display: grid;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+html {
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Add cross-browser animation prefixes */
+@-webkit-keyframes bounce {
+    0%, 100% { -webkit-transform: translateY(0); }
+    50% { -webkit-transform: translateY(-10px); }
+}
+
+@-moz-keyframes bounce {
+    0%, 100% { -moz-transform: translateY(0); }
+    50% { -moz-transform: translateY(-10px); }
+}
+
+@keyframes gradientMove {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes buzz {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(3px); }
+    50% { transform: translateX(0); }
+    75% { transform: translateX(-3px); }
+    100% { transform: translateX(0); }
+}
+</style>
+</head>
+<body>
+    <div class="header">
+        <img src="/Picsart_24-10-15_12-07-55-751.png" alt="Huaraches LA 18 Logo">
+    </div>
+    
+    <div class="welcome">
+        <div class="top-text">&#xa1;BIENVENIDOS A HUARACHES LA 18!</div>
+        <div class="bottom-text">EXPLORA NUESTRO MEN&#xda; Y REALIZA TU PEDIDO</div>
+    </div>
+    
+    <div class="menu-container" id="menu">
+        <!-- El menú se llenará dinámicamente con JavaScript -->
+    </div>
+
+    <button class="cart-button" onclick="scrollToOrder()">
+        &#x1f6d2;
+    </button>
+    
+    <div class="order-summary" id="orderSummary">
+        <h2>Tu Pedido</h2>
+        <table class="order-table">
+            <thead>
+                <tr>
+                    <th>Cantidad</th>
+                    <th>Producto</th>
+                    <th>Precio</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="orderItems">
+            </tbody>
+        </table>
+
+        <div class="customer-info">
+            <h3>Informaci&#xf3;n del Cliente</h3>
+            <input type="text" id="customerName" placeholder="Nombre del Cliente" required>
+            
+            <div class="salsa-section">
+                <label>Elige tu salsa:</label>
+                <select id="salsaChoice" required>
+                    <option value>Selecciona tu salsa</option>
+                    <option value="Verde">Salsa Verde</option>
+                    <option value="Roja">Salsa Roja</option>
+                    <option value="Ambas">Ambas Salsas</option>
+                </select>
+            </div>
+            
+            <button type="button" id="locationButton" class="add-button" style="margin: 10px 0;">
+                Dar mi ubicaci&#xf3;n
+            </button>
+            <div class="location-instructions">Da click y permite acceder a tu ubicaci&#xf3;n para entregar tu pedido</div>
+            <div id="locationStatus" style="color: #666; margin: 5px 0;"></div>
+            <input type="hidden" id="customerLat">
+            <input type="hidden" id="customerLng">
+            <textarea id="specialInstructions" placeholder="Instrucciones especiales (ejemplo: sin cebolla, sin queso rallado, etc.)" style="width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; height: 80px;"></textarea>
+            
+            <input type="number" id="tipAmount" placeholder="Propina (opcional)">
+            
+            <div class="totals" style="margin-top: 20px;">
+                <p>Subtotal: &#x24;<span id="subtotal">0.00</span></p>
+                <p>Env&#xed;o: &#x24;10.00</p>
+                <p>Propina: &#x24;<span id="tipDisplay">0.00</span></p>
+                <h3>Total Final: &#x24;<span id="finalTotal">0.00</span></h3>
+            </div>
+            
+            <div class="payment-section" style="margin-top: 20px;">
+                <label>M&#xe9;todo de Pago:</label>
+                <select id="paymentType" onchange="togglePaymentFields()">
+                    <option value>Selecciona m&#xe9;todo de pago</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                </select>
+                
+                <div id="cashPaymentField" style="display: none;">
+                    <input type="number" id="paymentAmount" placeholder="Pago con &#x24;">
+                </div>
+                
+                <div id="transferPaymentField" style="display: none;">
+                    <p style="color: #666; font-style: italic;">Se proporcionar&#xe1;n instrucciones de transferencia al completar el pedido</p>
+                </div>
+            </div>
+
+            <button class="add-button" onclick="completarPedido()" style="width: 100%; margin-top: 10px;">
+                Completar Pedido
+            </button>
+        </div>
+    </div>
+
+<script>
+let hasLocation = false;
+const WHATSAPP_NUMBER = "5625264945";
+const menuItems = [{
+  category: "Huaraches",
+  prepNote: "Se preparan con cebolla y queso rallado",
+  items: [{
+    name: "Huarache Sencillo",
+    price: 30,  
+    hasQuesillo: false
+  }, {
+    name: "Huarache con Quesillo",
+    price: 65,
+    hasQuesillo: false
+  }, {
+    name: "Huarache con Huevo",
+    price: 40,
+    quesilloExtra: 45
+  }, {
+    name: "Huarache con Chicharron",
+    price: 70,
+    quesilloExtra: 20
+  }, {
+    name: "Huarache con Tinga de Pollo",
+    price: 70,
+    quesilloExtra: 20
+  }, {
+    name: "Huarache con Tinga de Res",
+    price: 75,
+    quesilloExtra: 20
+  }, {
+    name: "Huarache con Bistec",
+    price: 70,
+    quesilloExtra: 20
+  }, {
+    name: "Huarache con Suadero",
+    price: 70,
+    quesilloExtra: 20
+  }, {
+    name: "Huarache con Pastor",
+    price: 70,
+    quesilloExtra: 20
+  }, {
+    name: "Huarache con Cochinita",
+    price: 75,
+    quesilloExtra: 20
+  }]
+}, {
+  category: "Sopes",
+  prepNote: "Se preparan con cebolla, queso rallado y lechuga",
+  items: [{
+    name: "Sope Sencillo",
+    price: 30,  
+    hasQuesillo: false
+  }, {
+    name: "Sope con Quesillo",
+    price: 55,
+    hasQuesillo: false
+  }, {
+    name: "Sope con Huevo",
+    price: 40,
+    quesilloExtra: 25
+  }, {
+    name: "Sope con Chicharron",
+    price: 60, 
+    quesilloExtra: 10
+  }, {
+    name: "Sope con Tinga de Pollo",
+    price: 60, 
+    quesilloExtra: 10
+  }, {
+    name: "Sope con Tinga de Res",
+    price: 65, 
+    quesilloExtra: 10
+  }, {
+    name: "Sope con Bistec",
+    price: 60, 
+    quesilloExtra: 10
+  }, {
+    name: "Sope con Suadero",
+    price: 60, 
+    quesilloExtra: 10
+  }, {
+    name: "Sope con Pastor",
+    price: 60, 
+    quesilloExtra: 10
+  }, {
+    name: "Sope con Cochinita",
+    price: 65, 
+    quesilloExtra: 10
+  }]
+}, {
+  category: "Tacos",
+  prepNote: "Se preparan con cebolla y cilantro",
+  items: [{
+    name: "Taco de Suadero",
+    price: 27,
+    quesilloExtra: 5
+  }, {
+    name: "Taco de Pastor",
+    price: 27,
+    quesilloExtra: 5
+  }, {
+    name: "Taco de Bistec",
+    price: 27,
+    quesilloExtra: 5
+  }, {
+    name: "Taco de Longaniza",
+    price: 27,
+    quesilloExtra: 5
+  }, {
+    name: "Taco Campechano",
+    price: 27,
+    quesilloExtra: 5
+  }]
+}, {
+  category: "Gorditas",
+  prepNote: "Se preparan con cebolla y queso rallado",
+  items: [{
+    name: "Gordita Sencilla",
+    price: 30,
+    hasQuesillo: false
+  }, {
+    name: "Gordita con Quesillo",
+    price: 40,
+    hasQuesillo: false
+  }, {
+    name: "Gordita con Tinga de Pollo",
+    price: 60,
+    quesilloExtra: 10
+  }, {
+    name: "Gordita con Tinga de Res",
+    price: 65,
+    quesilloExtra: 10
+  }, {
+    name: "Gordita con Bistec",
+    price: 60,
+    quesilloExtra: 10
+  }, {
+    name: "Gordita con Suadero",
+    price: 60,
+    quesilloExtra: 10
+  }, {
+    name: "Gordita con Pastor",
+    price: 60,
+    quesilloExtra: 10
+  }, {
+    name: "Gordita con Cochinita",
+    price: 65,
+    quesilloExtra: 10
+  }]
+}, {
+  category: "Quesadillas",
+  prepNote: "Se preparan con lechuga y queso",
+  items: [{
+    name: "Quesadilla de Quesillo",
+    price: 24,
+    hasQuesillo: false
+  }, {
+    name: "Quesadilla de Chicharron",
+    price: 24,
+    quesilloExtra: 5
+  }, {
+    name: "Quesadilla de Hongos",
+    price: 24,
+    quesilloExtra: 5
+  }, {
+    name: "Quesadilla de Papa con Longaniza",
+    price: 24,
+    quesilloExtra: 5
+  }, {
+    name: "Quesadilla de Tinga de Pollo",
+    price: 24,
+    quesilloExtra: 5
+  }, {
+    name: "Quesadilla de Tinga de Res",
+    price: 27,
+    quesilloExtra: 5
+  }, {
+    name: "Quesadilla de Cochinita",
+    price: 27,
+    quesilloExtra: 5
+  }]
+}, {
+  category: "Pambazos",
+  prepNote: "Se preparan con crema, queso rallado y lechuga",
+  items: [{
+    name: "Pambazo de Chicharron",
+    price: 30,
+    quesilloExtra: 10
+  }, {
+    name: "Pambazo de Papa con Longaniza",
+    price: 30,
+    quesilloExtra: 10
+  }, {
+    name: "Pambazo de Tinga de Pollo",
+    price: 30,
+    quesilloExtra: 10
+  }, {
+    name: "Pambazo de Tinga de Res",
+    price: 35,
+    quesilloExtra: 10
+  }, {
+    name: "Pambazo de Bistec",
+    price: 40,
+    quesilloExtra: 10
+  }, {
+    name: "Pambazo de Suadero",
+    price: 40,
+    quesilloExtra: 10
+  }, {
+    name: "Pambazo de Pastor",
+    price: 40,
+    quesilloExtra: 10
+  }, {
+    name: "Pambazo de Cochinita",
+    price: 40,
+    quesilloExtra: 10
+  }]
+}, {
+  category: "Tortas",
+  prepNote: "Se preparan con cebolla y cilantro",
+  items: [{
+    name: "Torta de Bistec",
+    price: 70
+  }, {
+    name: "Torta de Suadero",
+    price: 70
+  }, {
+    name: "Torta de Pastor",
+    price: 70
+  }, {
+    name: "Torta de Cochinita",
+    price: 70
+  }, {
+    name: "Torta Campechana",
+    price: 70
+  }]
+}, {
+  category: "Tostadas",
+  prepNote: "Se preparan con crema, queso rallado y lechuga",
+  items: [{
+    name: "Tostada de Tinga de Pollo",
+    price: 30
+  }, {
+    name: "Tostada de Tinga de Res",
+    price: 35
+  }, {
+    name: "Tostada de Cochinita",
+    price: 35
+  }, {
+    name: "Tostada de Pata",
+    price: 30
+  }]
+}, {
+  category: "Burritos y Costras",
+  items: [{
+    name: "Burrito de Bistec",
+    price: 70,
+    type: "burrito",
+    prepNote: "Con guarnición de nopales y pepinos"
+  }, {
+    name: "Burrito de Suadero",
+    price: 70,
+    type: "burrito",
+    prepNote: "Con guarnición de nopales y pepinos"
+  }, {
+    name: "Burrito de Pastor",
+    price: 70,
+    type: "burrito",
+    prepNote: "Con guarnición de nopales y pepinos"
+  }, {
+    name: "Burrito de Cochinita",
+    price: 70,
+    type: "burrito",
+    prepNote: "Con guarnición de nopales y pepinos"
+  }, {
+    name: "Burrito Campechano",
+    price: 70,
+    type: "burrito",
+    prepNote: "Con guarnición de nopales y pepinos"
+  }, {
+    name: "Burrito Combinado",
+    price: 70,
+    type: "burrito-combinado",
+    prepNote: "Con guarnición de nopales y pepinos"
+  }, {
+    name: "Costra de Bistec",
+    price: 35,
+    type: "costra",
+    prepNote: "Se preparan con nopales y cebolla"
+  }, {
+    name: "Costra de Suadero",
+    price: 35,
+    type: "costra",
+    prepNote: "Se preparan con nopales y cebolla"
+  }, {
+    name: "Costra de Pastor",
+    price: 35,
+    type: "costra",
+    prepNote: "Se preparan con nopales y cebolla"
+  }, {
+    name: "Costra de Cochinita",
+    price: 35,
+    type: "costra",
+    prepNote: "Se preparan con nopales y cebolla"
+  }]
+}, {
+  category: "Bebidas",
+  prepNote: "",
+  items: [{
+    name: "Agua de Jamaica 1L",
+    price: 25,
+    hasQuesillo: false
+  }, {
+    name: "Agua de Jamaica 1/2L",
+    price: 15,
+    hasQuesillo: false
+  }, {
+    name: "Agua de Horchata 1L",
+    price: 30,
+    hasQuesillo: false
+  }, {
+    name: "Agua de Horchata 1/2L",
+    price: 17,
+    hasQuesillo: false
+  }, {
+    name: "Coca Cola 600ml",
+    price: 26,
+    hasQuesillo: false
+  }, {
+    name: "Coca Cola 3L",
+    price: 50,
+    hasQuesillo: false
+  }, {
+    name: "Coca Cola 1.75L",
+    price: 42,
+    hasQuesillo: false
+  }]
+}];
+let orderItems = [];
+function renderMenu() {
+  const menuContainer = document.getElementById('menu');
+  menuContainer.innerHTML = '';
+  const categoryButtonsContainer = document.createElement('div');
+  categoryButtonsContainer.className = 'category-buttons-container';
+  menuContainer.appendChild(categoryButtonsContainer);
+  menuItems.forEach(category => {
+    const categoryButton = document.createElement('button');
+    categoryButton.className = 'category-button';
+    categoryButton.textContent = category.category;
+    categoryButton.onclick = () => toggleCategory(category.category);
+    categoryButtonsContainer.appendChild(categoryButton);
+    const categorySection = document.createElement('div');
+    categorySection.className = 'category-section';
+    categorySection.id = `section-${category.category}`;
+    
+    // Add category-wide prep note if available
+    if (category.prepNote) {
+      const categoryNote = document.createElement('div');
+      categoryNote.className = 'category-title';
+      categoryNote.innerHTML = `<span style="font-size: 0.8em; color: #777; font-style: italic;">${category.prepNote}</span>`;
+      categorySection.appendChild(categoryNote);
+    }
+    
+    category.items.forEach(item => {
+      const itemDiv = document.createElement('div');
+      itemDiv.className = 'menu-item';
+      const showQuesilloOption = item.quesilloExtra !== undefined;
+      
+      let prepNoteText = '';
+      // Use item-specific prep note if available, otherwise use category prep note
+      if (item.prepNote) {
+        prepNoteText = item.prepNote;
+      } else if (category.prepNote && category.category !== "Burritos y Costras") {
+        prepNoteText = category.prepNote;
+      }
+      
+      let prepNoteHTML = prepNoteText ? `<div class="prep-note">${prepNoteText}</div>` : '';
+      
+      itemDiv.innerHTML = `
+                <h3>${item.name}</h3>
+                <p class="price">$${item.price.toFixed(2)}</p>
+                ${prepNoteHTML}
+                <button class="add-button" onclick="addToOrder('${item.name}', ${item.price}, ${showQuesilloOption}, '${category.category}', ${item.quesilloExtra || 0})">
+                    Agregar a mi pedido
+                </button>
+            `;
+      categorySection.appendChild(itemDiv);
+    });
+    menuContainer.appendChild(categorySection);
+  });
+}
+function toggleCategory(categoryName) {
+  const selectedSection = document.getElementById(`section-${categoryName}`);
+  const allSections = document.querySelectorAll('.category-section');
+  if (selectedSection.classList.contains('active')) {
+    selectedSection.classList.remove('active');
+    return;
+  }
+  allSections.forEach(section => {
+    section.classList.remove('active');
+  });
+  if (selectedSection) {
+    selectedSection.classList.add('active');
+    selectedSection.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }
+}
+function addToOrder(name, basePrice, showQuesilloOption, category, quesilloExtra) {
+  let finalPrice = basePrice;
+  let itemName = name;
+  if (category === "Burritos y Costras" && name === "Burrito Combinado") {
+    const options = ["Suadero", "Bistec", "Pastor", "Cochinita"];
+    let selectedOptions = [];
+    let firstChoice = prompt("Elige la primera carne para tu burrito combinado:\n" + "1. Suadero\n2. Bistec\n3. Pastor\n4. Cochinita");
+    if (firstChoice && firstChoice >= 1 && firstChoice <= 4) {
+      selectedOptions.push(options[firstChoice - 1]);
+      const remainingOptions = options.filter(opt => opt !== options[firstChoice - 1]);
+      let secondChoice = prompt("Elige la segunda carne para tu burrito combinado:\n" + remainingOptions.map((opt, idx) => `${idx + 1}. ${opt}`).join('\n'));
+      if (secondChoice && secondChoice >= 1 && secondChoice <= remainingOptions.length) {
+        selectedOptions.push(remainingOptions[secondChoice - 1]);
+        itemName = `Burrito Combinado (${selectedOptions.join(' y ')})`;
+      } else {
+        return;
+      }
+    } else {
+      return;
+    }
+  }
+  if (showQuesilloOption) {
+    const wantsQuesillo = confirm('¿Deseas agregar quesillo?\n\nPresiona ACEPTAR para SÍ\nPresiona CANCELAR para NO');
+    if (wantsQuesillo) {
+      finalPrice += quesilloExtra;
+      itemName += ' con Quesillo Extra';
+    }
+  }
+  const existingItemIndex = orderItems.findIndex(item => item.name === itemName && item.price === finalPrice);
+  if (existingItemIndex !== -1) {
+    orderItems[existingItemIndex].quantity += 1;
+  } else {
+    orderItems.push({
+      name: itemName,
+      price: finalPrice,
+      category: category,
+      quantity: 1
+    });
+  }
+  updateOrderSummary();
+}
+function removeFromOrder(index) {
+  if (orderItems[index].quantity > 1) {
+    orderItems[index].quantity -= 1;
+  } else {
+    orderItems.splice(index, 1);
+  }
+  updateOrderSummary();
+}
+function updateOrderSummary() {
+  const orderItemsTable = document.getElementById('orderItems');
+  const subtotalSpan = document.getElementById('subtotal');
+  const finalTotalSpan = document.getElementById('finalTotal');
+  const tipDisplay = document.getElementById('tipDisplay');
+  const tipAmount = parseFloat(document.getElementById('tipAmount').value || 0);
+  orderItemsTable.innerHTML = orderItems.map((item, index) => `
+        <tr>
+            <td>${item.quantity}x</td>
+            <td>${item.name}</td>
+            <td>$${(item.price * item.quantity).toFixed(2)}</td>
+            <td>
+                <button class="delete-button" onclick="removeFromOrder(${index})">
+                    Eliminar
+                </button>
+            </td>
+        </tr>
+    `).join('');
+  const subtotal = orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const finalTotal = subtotal + 10 + tipAmount;
+  subtotalSpan.textContent = subtotal.toFixed(2);
+  tipDisplay.textContent = tipAmount.toFixed(2);
+  finalTotalSpan.textContent = finalTotal.toFixed(2);
+}
+function scrollToOrder() {
+  document.getElementById('orderSummary').scrollIntoView({
+    behavior: 'smooth'
+  });
+}
+function getCustomerLocation() {
+  const locationButton = document.getElementById('locationButton');
+  const locationStatus = document.getElementById('locationStatus');
+  if (navigator.geolocation || window.navigator.geolocation || window.navigator.mozGeolocation || window.navigator.webkitGeolocation) {
+    locationButton.disabled = true;
+    locationStatus.textContent = "Obteniendo ubicación...";
+    const geolocationAPI = navigator.geolocation || window.navigator.geolocation || window.navigator.mozGeolocation || window.navigator.webkitGeolocation;
+    const geoOptions = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    };
+    geolocationAPI.getCurrentPosition(position => {
+      document.getElementById('customerLat').value = position.coords.latitude;
+      document.getElementById('customerLng').value = position.coords.longitude;
+      locationStatus.textContent = "✅ Ubicación obtenida correctamente";
+      locationButton.textContent = "Actualizar ubicación";
+      locationButton.disabled = false;
+      hasLocation = true;
+    }, error => {
+      console.error('Geolocation error:', error);
+      locationStatus.textContent = "❌ Error al obtener ubicación. Por favor intenta de nuevo.";
+      locationButton.disabled = false;
+      hasLocation = false;
+      alert("No se pudo obtener la ubicación. El pedido no podrá ser completado sin una ubicación de entrega.");
+    }, geoOptions);
+  } else {
+    locationStatus.textContent = "❌ Tu navegador no soporta geolocalización";
+    hasLocation = false;
+    alert("Tu dispositivo no soporta geolocalización. No se podrá completar el pedido.");
+  }
+}
+function togglePaymentFields() {
+  const paymentType = document.getElementById('paymentType').value;
+  const cashField = document.getElementById('cashPaymentField');
+  const transferField = document.getElementById('transferPaymentField');
+  cashField.style.display = paymentType === 'efectivo' ? 'block' : 'none';
+  transferField.style.display = paymentType === 'transferencia' ? 'block' : 'none';
+  if (paymentType === 'transferencia') {
+    document.getElementById('paymentAmount').value = '';
+  }
+}
+function getWhatsAppUrl(number, text) {
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const base = isMobile ? 'whatsapp://' : 'https://web.whatsapp.com/';
+  return `${base}send?phone=${number}&text=${text}`;
+}
+function completarPedido() {
+  const customerName = document.getElementById('customerName').value;
+  const paymentType = document.getElementById('paymentType').value;
+  const paymentAmount = parseFloat(document.getElementById('paymentAmount').value || 0);
+  const subtotal = parseFloat(document.getElementById('subtotal').textContent);
+  const tipAmount = parseFloat(document.getElementById('tipAmount').value || 0);
+  const finalTotal = parseFloat(document.getElementById('finalTotal').textContent);
+  const specialInstructions = document.getElementById('specialInstructions').value;
+  const salsaChoice = document.getElementById('salsaChoice').value;
+  if (orderItems.length === 0) {
+    alert('Por favor agrega items a tu pedido primero');
+    return;
+  }
+  if (!customerName) {
+    alert('Por favor ingresa tu nombre');
+    return;
+  }
+  if (!paymentType) {
+    alert('Por favor selecciona un método de pago');
+    return;
+  }
+  if (!salsaChoice) {
+    alert('Por favor selecciona tu salsa preferida');
+    return;
+  }
+  if (subtotal < 100) {
+    alert('El pedido mínimo debe ser de $100');
+    return;
+  }
+  if (paymentType === 'efectivo' && (!paymentAmount || paymentAmount < finalTotal)) {
+    alert('El monto de pago debe ser mayor o igual al total');
+    return;
+  }
+  if (!hasLocation) {
+    alert('Por favor proporciona tu ubicación para la entrega');
+    return;
+  }
+  const change = paymentType === 'efectivo' ? paymentAmount - finalTotal : 0;
+  let orderSummary = `*NUEVO PEDIDO*%0A%0A`;
+  orderSummary += `*Cliente:* ${customerName}%0A%0A`;
+  orderSummary += `*RESUMEN DEL PEDIDO:*%0A`;
+  orderItems.forEach(item => {
+    orderSummary += `${item.quantity}x ${item.name} - $${(item.price * item.quantity).toFixed(2)}%0A`;
+  });
+  orderSummary += `%0A*Salsa elegida:* ${salsaChoice}%0A`;
+  if (specialInstructions) {
+    orderSummary += `%0A*Instrucciones especiales:*%0A${specialInstructions}%0A`;
+  }
+  orderSummary += `%0A*Subtotal:* $${subtotal.toFixed(2)}%0A`;
+  orderSummary += `*Envío:* $10.00%0A`;
+  orderSummary += `*Propina:* $${tipAmount.toFixed(2)}%0A`;
+  orderSummary += `*Total Final:* $${finalTotal.toFixed(2)}%0A%0A`;
+  orderSummary += `*Método de Pago:* ${paymentType === 'efectivo' ? 'Efectivo' : 'Transferencia'}%0A`;
+  if (paymentType === 'efectivo') {
+    orderSummary += `*Pago con:* $${paymentAmount.toFixed(2)}%0A`;
+    orderSummary += `*Cambio:* $${change.toFixed(2)}%0A`;
+  } else {
+    orderSummary += `*PENDIENTE INSTRUCCIONES DE TRANSFERENCIA*%0A`;
+  }
+  const lat = document.getElementById('customerLat').value;
+  const lng = document.getElementById('customerLng').value;
+  orderSummary += `%0A*Ubicación de entrega:*%0A`;
+  orderSummary += `https://www.google.com/maps?q=${lat},${lng}`;
+  const whatsappUrl = getWhatsAppUrl(WHATSAPP_NUMBER, orderSummary);
+  window.open(whatsappUrl);
+  orderItems = [];
+  document.getElementById('customerName').value = '';
+  document.getElementById('paymentType').value = '';
+  document.getElementById('paymentAmount').value = '';
+  document.getElementById('tipAmount').value = '';
+  document.getElementById('specialInstructions').value = '';
+  document.getElementById('salsaChoice').value = '';
+  document.getElementById('locationStatus').textContent = '';
+  hasLocation = false;
+  updateOrderSummary();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  renderMenu();
+  document.getElementById('tipAmount').addEventListener('input', updateOrderSummary);
+  document.getElementById('locationButton').addEventListener('click', getCustomerLocation);
+});
+</script>
+
+</body>
+</html>
