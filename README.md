@@ -1,107 +1,41 @@
-## Plataforma SaaS Multi-Tenant
+# Plataforma SaaS Multi-Tenant para Restaurantes
 
-Este proyecto documenta la evolución de un menú digital estático, que fue creado en html, despues renderizado y mejorado a REACT 
-mediante el uso responsable de herramientas de IA que se usaron para escribir código, con el objetivo de potenciar la productividad y optimizar los tiempos, hacia un Software as a Service completo. 
+> Un sistema de punto de venta POS y gestión operativa basado en la nube, diseñado para resolver la fricción logística en negocios de comida a través de una arquitectura Multi-Inquilino o Multi-Tenant
 
-Nació para resolver el estrés operativo de 
-un negocio de comida real: la saturación de mensajes, la pérdida de comandas 
-en WhatsApp y las fugas de dinero por calcular de forma incorrecta las 
-distancias de envío.
+Este proyecto documenta la evolución de un menú digital estático hacia un Saas completo. Nació para resolver el estrés operativo de un negocio de comida real (Huaraches 'La 18'): la saturación de mensajes, la pérdida de comandas y las fugas de capital por cálculos manuales incorrectos de envío.
 
-La arquitectura actual está diseñada bajo un modelo multi-inquilino. Esto 
-significa que un solo código base es capaz de alojar y operar el menú, los 
-inventarios y las ventas de múltiples sucursales o restaurantes de forma 
-independiente, aislando la información a través de identificadores únicos 
-en la base de datos.
+A partir del 10/09/2026, el sistema se encuentra desplegado en producción a través de Netlify, operando exitosamente con múltiples sucursales reales bajo un único código base.
 
 ## Arquitectura y Stack Tecnológico
+El sistema opera sin servidores tradicionales de renderizado, ejecutándose directamente en el navegador del cliente para lograr latencia cero.
 
-El sistema opera sin servidores tradicionales de renderizado, ejecutándose 
-directamente en el navegador del cliente para lograr la máxima velocidad y 
-menor latencia posible.
-
-* Frontend: Construido con React (procesado en vivo vía Babel) y Tailwind CSS 
-  para lograr una interfaz responsiva, ligera y con principios Glassmorphism.
-* Backend y Base de Datos: PostgreSQL alojado en Supabase que es gratuito (reduciendo costos de operacion)
-* Sincronización: WebSockets nativos para eliminar las recargas de página y 
-  mantener la cocina actualizada al segundo.
+* **Frontend:** React (vía Babel) y Tailwind CSS para interfaces responsivas bajo principios de Glassmorphism.
+* **Backend y Base de Datos:** PostgreSQL en Supabase, optimizando costos operativos.
+* **Sincronización:** WebSockets nativos para actualizaciones en tiempo real en cocina, eliminando recargas de página.
 
 ## Módulos Principales
 
 ### 1. Aplicación de Clientes (menus.html)
-Es el punto de venta de cara al usuario. El cliente navega por el menú, 
-personaliza sus modificadores (por ejemplo, sin cebolla, con quesillo extra) 
-y arma su orden. 
-
-El sistema intercepta el cierre de la venta para calcular la distancia en 
-línea recta usando la API de Geolocalización del navegador. Si el cliente 
-está dentro del radio de cobertura, tarifa el costo de envío de manera 
-automática; si está fuera, bloquea la venta a domicilio pero se permite en PICKUP. Finalmente, empaqueta la 
-transacción, resuelve la codificación UTF-8 para que se generen los emojis sin problema alguno y la envía directamente a la 
-API de WhatsApp del restaurante.
+Punto de venta orientado al consumidor final. Permite navegación, personalización de modificadores y cálculo de tarifas dinámicas de envío vía API de Geolocalización usando la formula de Haversine. Bloquea pedidos fuera de rango, resuelve codificación UTF-8 para emojis y empaqueta la transacción directo a la API de WhatsApp del local.
 
 ### 2. Panel Operativo y Administrativo (administrador.html)
-El cerebro del negocio en la cocina. Protegido por un PIN de acceso cifrado, 
-este panel mantiene una conexión persistente con la base de datos.
+El cerebro en la cocina, protegido por PIN cifrado y conexión persistente.
+* **Alertas:** Notificaciones sonoras y visuales full-screen obligatorias para confirmar recepción de comandas.
+* **Motor de Impresión:** Formateo de datos en un portal oculto del DOM, inyectado vía CSS estricto para miniprinters Bluetooth (58mm).
+* **Gestión:** Control de inventario en tiempo real, personalización de branding y visualización de KPIs (ventas, cancelaciones, productos estrella).
 
-* Recepción de Comandas: Cuando un cliente finaliza un pedido, el panel 
-  lanza una alerta sonora y visual de pantalla completa que obliga al 
-  operador a confirmar de enterado
-* Motor de Impresión Térmica: Formatea los datos del pedido en un portal 
-  oculto del DOM y los inyecta en el sistema operativo mediante reglas CSS 
-  estrictas, optimizadas para miniprinters de 58mm para poder utilizar impresoras de BT
-* Gestión del Local: Permite al dueño modificar su inventario, apagar 
-  productos agotados, cambiar sus colores de marca, subir su logotipo a 
-  un servidor de almacenamiento y abrir/cerrar tienda y unas métricas sencillas que son: producto + y - vendido por semana/mes,
-  pedidos cancelados, ingresos generados con los pedidos completados.
+### 3. Visor de Menú Gráfico
+Solución alternativa con un motor de inyección de imágenes responsivo. Escucha eventos táctiles para maximizar el viewport dinámicamente al hacer scroll.
 
-### 3. Visor de Menú Gráfico (menu-imagenes.html)
-Una solución alterna para sucursales que requieren mostrar su carta 
-escaneada o en fotografías. Implementa un motor de inyección de imágenes 
-responsivo y un botón fijo en la interfaz, el cual escucha el comportamiento 
-táctil del usuario para maximizar el espacio visual al hacer scroll.
+## Estructura de Datos y Seguridad con RLS
+El modelo relacional (`schema.sql` delega la seguridad directamente al motor de la base de datos mediante Row Level Security (RLS) en tres capas:
+* **Capa Pública (MENU DIGITAL):** Permisos de lectura de inventario e inserción estricta de pedidos. Sin permisos de alteración.
+* **Capa de Sucursal (ADMIN):** Privilegios de modificación encapsulados matemáticamente al `tienda_id` correspondiente.
+* **Capa Superior (OLMAIRY):** Acceso global para registrar tenants y administrar la infraestructura.
 
-## Estructura de Datos y Seguridad
-
-El archivo schema.sql contiene el diseño relacional del proyecto. La 
-seguridad está delegada al motor de la base de datos mediante políticas de 
-seguridad a nivel de fila RLS, divididas en tres niveles 
-operativos:
-
-1. Capa Pública: El consumidor final solo tiene permisos de lectura sobre 
-   el inventario abierto y permiso de inserción estricta en la tabla de 
-   pedidos. No puede alterar ni borrar información.
-
-2. Capa de Sucursal (Tenant): El dueño del restaurante tiene privilegios 
-   de modificación pero están encapsulados matemáticamente a los registros 
-   que coinciden con el identificador de su tienda.
-
-3. Capa Superior (OLMAIRY): Privilegios absolutos sobre la infraestructura 
-   para registrar nuevos restaurantes, modificar parámetros globales o 
-   suspender cuentas.
-
-### COMO ULTIMA FASE SE REALIZÓ la Migración ETL y sstabilización del SaaS (Supabase)
-
-Migración exitosa de 1,147 pedidos que se encontraban en la DB de cuando habia codigo hardcodeado en el front,
-esto se hizo para no perder los registros de que esta app ya estaba en servicio y funcionaba correctamente, ya que
-ahi la base de datos era únicamente del restaurante original HUARACHES LA 18.
-se migro a la nueva arquitectura multi-tenant, garantizando integridad referencial y métricas reales.
-
-* **Data Pruning & Esquema:** 
-  Limpieza de columnas legacy, adaptación a campos dinámicos (`JSONB`) 
-  y cumplimiento de nuevas reglas `NOT NULL`.
-
-* **Sincronización de IDs:** 
-  Truncado de tabla con `RESTART IDENTITY` y reasignación del secuenciador
-  `setval` al ID máximo para evitar colisiones en producción.
-
-* **Estandarización:** 
-  Actualización masiva de estados (`entregado` → `despachado`) para
-  habilitar el nuevo dashboard de métricas y pudiera leer los pedidos antiguos.
-
-* **Purga de Pruebas:** 
-  Eliminación condicional de registros de testeo de la app (nombres "prueba" 
-  o teléfonos ficticios "5555555555" para consolidar analíticas 100% precisas.
-
-  AHORA 10/09/2026 prácticamente están funcionando estas webapps, desplegadas en un host gratuito en Netlify y existen 2 tiendas reales
-  que se encuentra utilizando este multitenant. Gracias.
+## Historial de Versiones: Migración ETL y Estabilización SaaS
+Migración exitosa de 1,147 pedidos históricos desde la base de datos original (legacy) hacia la nueva arquitectura multi-tenant, garantizando la preservación de métricas y la integridad referencial.
+* **Data Pruning:** Limpieza de columnas, eliminando pedidos de prueba que se hicieron a lo largo del tiempo con nombre prueba o telefono ficticio 5555555555, se hizo la adaptación a campos dinámicos (`JSONB`) y reglas `NOT NULL`.
+* **Sincronización de IDs:** Truncado con `RESTART IDENTITY` y ajuste del secuenciador `setval` para evitar colisiones.
+* **Estandarización:** Transición masiva de estados (`entregado` → `despachado`) para compatibilidad del dashboard.
+* **Purga de Pruebas:** Eliminación de registros de desarrollo para asegurar analíticas 100% precisas.
