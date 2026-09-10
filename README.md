@@ -1,4 +1,4 @@
-# Huaraches La 18 | Plataforma SaaS Multi-Tenant
+Plataforma SaaS Multi-Tenant
 
 Este proyecto documenta la evolución de un menú digital estático hacia un 
 Software as a Service completo. Nació para resolver el estrés operativo de 
