@@ -1,7 +1,9 @@
 ## Plataforma SaaS Multi-Tenant
 
-Este proyecto documenta la evolución de un menú digital estático hacia un 
-Software as a Service completo. Nació para resolver el estrés operativo de 
+Este proyecto documenta la evolución de un menú digital estático, que fue creado en html, despues renderizado y mejorado a REACT 
+mediante el uso responsable de herramientas de IA que se usaron para escribir código, con el objetivo de potenciar la productividad y optimizar los tiempos, hacia un Software as a Service completo. 
+
+Nació para resolver el estrés operativo de 
 un negocio de comida real: la saturación de mensajes, la pérdida de comandas 
 en WhatsApp y las fugas de dinero por calcular de forma incorrecta las 
 distancias de envío.
@@ -12,8 +14,6 @@ inventarios y las ventas de múltiples sucursales o restaurantes de forma
 independiente, aislando la información a través de identificadores únicos 
 en la base de datos.
 
----
-
 ## Arquitectura y Stack Tecnológico
 
 El sistema opera sin servidores tradicionales de renderizado, ejecutándose 
@@ -22,7 +22,7 @@ menor latencia posible.
 
 * Frontend: Construido con React (procesado en vivo vía Babel) y Tailwind CSS 
   para lograr una interfaz responsiva, ligera y con principios Glassmorphism.
-* Backend y Base de Datos: PostgreSQL alojado en Supabase.
+* Backend y Base de Datos: PostgreSQL alojado en Supabase que es gratuito (reduciendo costos de operacion)
 * Sincronización: WebSockets nativos para eliminar las recargas de página y 
   mantener la cocina actualizada al segundo.
 
@@ -36,7 +36,7 @@ y arma su orden.
 El sistema intercepta el cierre de la venta para calcular la distancia en 
 línea recta usando la API de Geolocalización del navegador. Si el cliente 
 está dentro del radio de cobertura, tarifa el costo de envío de manera 
-automática; si está fuera, bloquea la venta. Finalmente, empaqueta la 
+automática; si está fuera, bloquea la venta a domicilio pero se permite en PICKUP. Finalmente, empaqueta la 
 transacción, resuelve la codificación UTF-8 para que se generen los emojis sin problema alguno y la envía directamente a la 
 API de WhatsApp del restaurante.
 
@@ -60,8 +60,6 @@ Una solución alterna para sucursales que requieren mostrar su carta
 escaneada o en fotografías. Implementa un motor de inyección de imágenes 
 responsivo y un botón fijo en la interfaz, el cual escucha el comportamiento 
 táctil del usuario para maximizar el espacio visual al hacer scroll.
-
----
 
 ## Estructura de Datos y Seguridad
 
