@@ -111,26 +111,22 @@
 
         // --- ITEM ADMINISTRABLE ---
         const AdminProductItem = memo(({ item, onToggle, onDelete }) => {
-            const [isProcessing, setIsProcessing] = useState(false);
-
-            const handleToggle = async () => {
-                setIsProcessing(true);
-                await onToggle(item.id, !item.disponible);
-                setIsProcessing(false);
+            // Quitamos el estado local 'isProcessing' para que no parpadee el loader,
+            // confiamos en el cambio optimista del padre.
+            
+            const handleToggle = () => {
+                onToggle(item.id, !item.disponible);
             };
 
-            const handleDelete = async () => {
+            const handleDelete = () => {
                 if(confirm(`¿Estás seguro de eliminar "${item.nombre}"?`)) {
-                    setIsProcessing(true);
-                    await onDelete(item.id);
-                    // No seteamos false aquí porque el componente se desmontará
+                    onDelete(item.id);
                 }
             };
 
             return (
                 <div className={`relative rounded-2xl shadow-sm border p-4 flex flex-col justify-between items-center transition-all duration-300 ${item.disponible ? 'bg-white border-gray-200' : 'bg-gray-800 border-gray-700 opacity-80'}`}>
                     
-                    {/* Botón Eliminar */}
                     <button onClick={handleDelete} className="absolute top-2 right-2 text-gray-400 hover:text-red-500 p-1 rounded-full hover:bg-red-50 transition-colors z-10">
                         <Icons.Trash size={20} />
                     </button>
@@ -144,22 +140,14 @@
 
                     <button 
                         onClick={handleToggle}
-                        disabled={isProcessing}
                         className={`
                             relative w-full py-3 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all shadow-md active:scale-95
                             ${item.disponible 
                                 ? 'bg-green-600 text-white shadow-green-500/30 hover:brightness-110' 
                                 : 'bg-red-600 text-white shadow-red-500/30 hover:brightness-110'}
-                            ${isProcessing ? 'opacity-70 cursor-wait' : ''}
                         `}
                     >
-                        {isProcessing ? (
-                            <div className="w-5 h-5 border-2 border-white/50 border-t-white rounded-full animate-spin"></div>
-                        ) : (
-                            <>
-                                {item.disponible ? <><Icons.Check size={20}/> ACTIVO</> : <><Icons.X size={20}/> AGOTADO</>}
-                            </>
-                        )}
+                        {item.disponible ? <><Icons.Check size={20}/> ACTIVO</> : <><Icons.X size={20}/> AGOTADO</>}
                     </button>
                 </div>
             );
@@ -179,12 +167,16 @@
                     const { data: cats, error: errCats } = await supabase.from('categorias').select('*').order('orden', { ascending: true });
                     if (errCats) throw errCats;
 
-                    const { data: items, error: errItems } = await supabase.from('menu_items').select('*').order('orden', { ascending: true });
+                    const { data: items, error: errItems } = await supabase.from('menu_items').select('*');
                     if (errItems) throw errItems;
 
                     setCategoriesDB(cats);
                     setMenuItemsDB(items);
-                    if (cats.length > 0 && !activeCategory) setActiveCategory(cats[0].nombre);
+                    
+                    // Solo establecemos la categoría activa la primera vez
+                    if (cats.length > 0) {
+                        setActiveCategory(prev => prev ? prev : cats[0].nombre);
+                    }
                 } catch (error) {
                     console.error("Error:", error);
                     showNotification("Error de conexión", "error");
@@ -195,10 +187,13 @@
 
             useEffect(() => {
                 fetchData();
+                
+                // Suscripción Realtime (Para mantener sincronizados varios dispositivos)
                 const channel = supabase
                 .channel('realtime_menu_admin')
                 .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, (payload) => {
-                     // Recargar completo para manejar inserts y deletes correctamente ordenados
+                     // Solo actualizamos si el cambio viene de OTRO lado, 
+                     // para evitar conflictos con nuestro cambio optimista
                      fetchData(); 
                 })
                 .subscribe();
@@ -210,32 +205,42 @@
                 setTimeout(() => setNotification(null), 3000);
             }, []);
 
+            // --- CAMBIO DE DISPONIBILIDAD EN TIEMPO REAL (OPTIMISTA) ---
             const toggleAvailability = useCallback(async (id, newStatus) => {
+                // 1. Actualizar visualmente DE INMEDIATO (Optimistic UI)
+                setMenuItemsDB(prevItems => 
+                    prevItems.map(item => item.id === id ? { ...item, disponible: newStatus } : item)
+                );
+
                 try {
+                    // 2. Enviar a Supabase en segundo plano
                     const { error } = await supabase.from('menu_items').update({ disponible: newStatus }).eq('id', id);
                     if (error) throw error;
-                    // El cambio se reflejará vía realtime, pero actualizamos optimista para velocidad
-                    setMenuItemsDB(prev => prev.map(item => item.id === id ? { ...item, disponible: newStatus } : item));
                 } catch (err) {
-                    showNotification("Error al actualizar", "error");
+                    // 3. Si falla, revertir el cambio visual
+                    setMenuItemsDB(prevItems => 
+                        prevItems.map(item => item.id === id ? { ...item, disponible: !newStatus } : item)
+                    );
+                    showNotification("Error al actualizar. Revisa tu conexión.", "error");
                 }
             }, []);
 
             const deleteProduct = useCallback(async (id) => {
+                // Optimista
+                setMenuItemsDB(prev => prev.filter(item => item.id !== id));
                 try {
                     const { error } = await supabase.from('menu_items').delete().eq('id', id);
                     if (error) throw error;
                     showNotification("Producto eliminado");
                 } catch (err) {
-                    alert("Error al eliminar. Revisa permisos.");
+                    fetchData(); // Revertir recargando
+                    showNotification("Error al eliminar", "error");
                 }
             }, []);
 
             const addProduct = useCallback(async (formData) => {
                 try {
-                    // Calculamos un orden simple (al final)
                     const maxOrder = menuItemsDB.reduce((max, item) => item.orden > max ? item.orden : max, 0);
-                    
                     const { error } = await supabase.from('menu_items').insert([{
                         nombre: formData.nombre,
                         precio: parseFloat(formData.precio),
@@ -247,19 +252,68 @@
 
                     if (error) throw error;
                     showNotification("Producto creado exitosamente");
+                    fetchData(); // Aquí sí recargamos para obtener el ID nuevo
                 } catch (err) {
                     console.error(err);
-                    alert("Error al crear. Revisa permisos SQL.");
+                    showNotification("Error al crear", "error");
                 }
             }, [menuItemsDB]);
 
+            // --- LÓGICA DE ORDENAMIENTO (IGUAL QUE LA APP CLIENTE) ---
             const processedMenu = useMemo(() => {
                 if (!categoriesDB.length) return [];
-                return categoriesDB.map(cat => ({
-                    id: cat.id,
-                    category: cat.nombre,
-                    items: menuItemsDB.filter(item => item.categoria_id === cat.id)
-                })).filter(cat => cat.items.length > 0 || true); // Mostrar categorías aunque estén vacías para poder agregarles cosas
+                
+                return categoriesDB.map(cat => {
+                    // 1. Filtrar productos de esta categoría
+                    let catItems = menuItemsDB.filter(item => item.categoria_id === cat.id);
+
+                    // 2. Aplicar el mismo ordenamiento complejo que la App Cliente
+                    catItems.sort((a, b) => {
+                        const nameA = a.nombre.toLowerCase(); 
+                        const nameB = b.nombre.toLowerCase();
+                        
+                        // Lógica Burritos
+                        if (cat.nombre === 'Burritos y Costras') {
+                            const getWeight = (n) => {
+                                if (n.includes('burrito')) return 1; 
+                                if (n.includes('costra')) return 2;  
+                                return 3; 
+                            };
+                            return getWeight(nameA) - getWeight(nameB) || a.orden - b.orden;
+                        }
+
+                        // Lógica General
+                        const getWeight = (n) => { 
+                            if (n.includes('sencillo')) return 1; 
+                            if (n.includes('quesillo')) return 2; 
+                            if (n.includes('huevo')) return 3; 
+                            return 10; 
+                        };
+
+                        // Lógica Bebidas
+                        if (cat.nombre === 'Bebidas') { 
+                            const getDrinkWeight = (n) => { 
+                                if (n.includes('jamaica')) return 1; 
+                                if (n.includes('horchata')) return 2; 
+                                if (n.includes('ponche')) return 3; 
+                                return 10; 
+                            }; 
+                            return getDrinkWeight(nameA) - getDrinkWeight(nameB) || a.orden - b.orden; 
+                        }
+
+                        const weightA = getWeight(nameA); 
+                        const weightB = getWeight(nameB); 
+                        
+                        if (weightA !== weightB) return weightA - weightB; 
+                        return a.orden - b.orden;
+                    });
+
+                    return {
+                        id: cat.id,
+                        category: cat.nombre,
+                        items: catItems
+                    };
+                }).filter(cat => cat.items.length > 0 || true); 
             }, [categoriesDB, menuItemsDB]);
 
             if (isLoading) return <div className="min-h-screen bg-gray-900 flex items-center justify-center"><div className="loader"></div></div>;
