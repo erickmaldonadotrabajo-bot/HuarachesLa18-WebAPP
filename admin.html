@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ADMIN MASTER | Huaraches La 18</title>
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/900/900797.png">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.0/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700;900&display=swap');
+        body { font-family: 'Poppins', sans-serif; background-color: #111827; color: white; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .animate-card { animation: fade-in-up 0.3s ease-out forwards; }
+        @keyframes fade-in-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+        
+        .toggle-checkbox:checked { right: 0; border-color: #68D391; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #68D391; }
+
+        /* Estilos especificos para el area del ticket de vista previa */
+        #ticket-area {
+            position: fixed; top: 0; left: -9999px; width: 58mm;
+            background-color: white; color: black; z-index: -1;
+        }
+
+        /* Configuracion de media query para impresion termica a 58mm */
+        @media print {
+            @page { size: 58mm auto; margin: 0mm; }
+            body { margin: 0; padding: 0; background-color: white; }
+            body * { visibility: hidden; height: 0; overflow: hidden; }
+            
+            #ticket-area {
+                visibility: visible; position: absolute; left: 0 !important; top: 0 !important;
+                width: 58mm !important; height: auto !important; overflow: visible !important;
+                padding: 5px 10px 20px 5px; 
+                z-index: 9999;
+                background-color: white !important; color: black !important;
+                font-family: 'Courier New', Courier, monospace; font-size: 17px; line-height: 1.1; text-transform: uppercase;
+            }
+            
+            #ticket-area * { visibility: visible; height: auto; color: black !important; }
+            
+            .ticket-header { text-align: center; margin-bottom: 10px; display: flex; flex-direction: column; align-items: center; }
+            .ticket-logo { width: 60px; height: 60px; border-radius: 50%; margin-bottom: 5px; background-color: white; filter: grayscale(100%)  contrast(100%)  brightness(110%); }
+            .ticket-divider { border-bottom: 2px dashed #000; margin: 5px 0; width: 100%; }
+            
+            .ticket-totals-section { text-align: right; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px; }
+            .ticket-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+            .ticket-final-total { font-weight: 900; font-size: 16px; border-top: 2px solid #000; padding-top: 5px; margin-top: 2px; }
+            
+            .ticket-footer { text-align: center; margin-top: 15px; font-size: 12px; padding-bottom: 10px; }
+            .ticket-box { border: 2px solid #000; padding: 5px; margin: 5px 0; font-weight: bold; text-align: left; font-size: 11px;}
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module" data-presets="react">
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+        // Conexion a BD y variables de entorno
+        const SUPABASE_URL = 'https://uzpinrjzbucoihxuvdvm.supabase.co'; 
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV6cGlucmp6YnVjb2loeHV2ZHZtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQxNzEyNDgsImV4cCI6MjA3OTc0NzI0OH0.1bIIem8dU3VN-A8AH81smAt584zUD-Yf977MSUIEP2w'; 
+        
+        const supabase = (SUPABASE_URL && SUPABASE_URL.startsWith('http')) ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+        
+        // Inicializacion de audio para notificaciones en loop
+        const alertSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+        alertSound.loop = true; 
+
+        // Repositorio de iconos SVG
+        const Icons = { 
+            Menu: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>, 
+            Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>, 
+            Plus: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>, 
+            Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>, 
+            Edit: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>, 
+            Check: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>, 
+            Moto: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>, 
+            Printer: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>, 
+            MapPin: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>, 
+            Whatsapp: () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.592 2.654-.696c1.029.575 1.943.889 3.149.889 3.182 0 5.768-2.587 5.769-5.766.001-3.181-2.584-5.768-5.766-5.768zm7.118 9.318c-1.286 1.983-3.295 3.174-5.786 3.18-4.496.007-8.15-3.647-8.161-8.143-.005-2.091.737-4.053 2.193-5.612 1.547-1.656 3.612-2.569 5.867-2.574 4.497-.006 8.15 3.649 8.162 8.144.005 1.921-.617 3.771-2.064 5.25l-.211-.245z"/></svg>, 
+            Lock: () => <svg className="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>,
+            Eye: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>,
+            XCircle: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        };
+
+        const limpiarTexto = (t) => t ? String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "").trim() : "";
+
+        // Constantes URI pre-procesadas para evitar errores de renderizado en notificaciones WA
+        const E_FIRE = decodeURIComponent('%F0%9F%94%A5');
+        const E_USER = decodeURIComponent('%F0%9F%91%A4');
+        const E_PHONE = decodeURIComponent('%F0%9F%93%B1');
+        const E_POINT = decodeURIComponent('%F0%9F%91%89');
+        const E_CHECK = decodeURIComponent('%E2%9C%85');
+        const E_NOTE = decodeURIComponent('%F0%9F%93%9D');
+        const E_MOTO = decodeURIComponent('%F0%9F%9B%B5');
+        const E_BAG = decodeURIComponent('%F0%9F%9B%8D');
+        const E_CASH = decodeURIComponent('%F0%9F%92%B8');
+        const E_MONEY = decodeURIComponent('%F0%9F%92%B0');
+        const E_PIN = decodeURIComponent('%F0%9F%93%8D');
+
+        // Generacion de URI de WhatsApp con formateo de ticket
+        const generarMensajeWA = (order) => {
+            const isDelivery = (order.lat && order.lng && order.lat !== 0);
+            const title = isDelivery ? "PEDIDO A DOMICILIO" : "PEDIDO PICKUP";
+            
+            let msg = `${E_FIRE} *${title}* ${E_FIRE}\n\n`;
+            msg += `${E_USER} *Cliente:* ${limpiarTexto(order.cliente_nombre)}\n`;
+            msg += `${E_PHONE} *Tel:* ${order.cliente_telefono}\n`;
+            if (order.salsa) msg += `${E_POINT} *SALSA:* ${limpiarTexto(order.salsa)}\n`;
+            msg += `--------------------------------\n`;
+            
+            if (order.detalle_json) {
+                order.detalle_json.forEach(item => { 
+                    const extra = item.isExtra ? ` *CON QUESILLO*` : '';
+                    const details = item.details ? ` ${limpiarTexto(item.details)}` : '';
+                    msg += `${E_CHECK} *${item.qty}* x *${limpiarTexto(item.nombre)}*${extra}${details} - $${(item.price * item.qty).toFixed(2)}\n\n`; 
+                });
+            }
+            if(order.nota) msg += `\n${E_NOTE} *Notas:* ${limpiarTexto(order.nota)}\n`;
+            msg += `--------------------\n\n`;
+            
+            const envio = parseFloat(order.envio || 0);
+            const propina = parseFloat(order.propina || 0);
+            const total = parseFloat(order.total || 0);
+            const subtotal = total - envio - propina;
+
+            msg += `Subtotal: $${subtotal.toFixed(2)}\n`;
+            if (isDelivery) msg += `${E_MOTO} Envio: $${envio.toFixed(2)}\n\n`;
+            else msg += `${E_BAG} Pickup: Sin costo de envio\n\n`;
+            if (propina > 0) msg += `${E_CASH} Propina: *$${propina.toFixed(2)}*\n`;
+            
+            let pagoInfo = "";
+            const metodoPago = String(order.metodo_pago || '').toLowerCase();
+            if (metodoPago.includes('efectivo') && order.pago_con) {
+                const pagoCon = parseFloat(order.pago_con);
+                const cambio = pagoCon - total;
+                pagoInfo = `*EFECTIVO PAGA CON: $${pagoCon.toFixed(2)} CAMBIO: $${cambio > 0 ? cambio.toFixed(2) : '0.00'}*`;
+            } else {
+                pagoInfo = limpiarTexto(order.metodo_pago).toUpperCase();
+            }
+
+            msg += `\n${E_MONEY} *TOTAL: $${total.toFixed(2)}*\n\n *Pago:* ${pagoInfo}\n`;
+            if (isDelivery) msg += `\n${E_PIN} Ubicacion:\n *https://www.google.com/maps/search/?api=1&query=${order.lat},${order.lng}*`;
+            
+            return encodeURIComponent(msg);
+        };
+
+        // Procesamiento de comandos ESC/POS para interaccion directa con hardware termico
+        const imprimirTicketDirecto = (order) => {
+            if (!order) return;
+            const date = new Date(order.fecha || order.created_at).toLocaleString('es-MX');
+            const tipoServicio = (order.lat && order.lng && order.lat !== 0) ? 'DOMICILIO' : 'PICKUP';
+            const isDelivery = tipoServicio === 'DOMICILIO';
+            const envio = parseFloat(order.envio || 0);
+            const propina = parseFloat(order.propina || 0);
+            const total = parseFloat(order.total || 0);
+            const subtotal = total - envio - propina;
+
+            const ESC = '\x1B';
+            const GS = '\x1D';
+            const INIT = ESC + '@';
+            const ALIGN_LEFT = ESC + 'a' + '\x00';
+            const ALIGN_CENTER = ESC + 'a' + '\x01';
+            const BOLD_ON = ESC + 'E' + '\x01';
+            const BOLD_OFF = ESC + 'E' + '\x00';
+            const TEXT_NORMAL = GS + '!' + '\x00';
+            const TEXT_DOUBLE_H = GS + '!' + '\x01';
+            const TEXT_DOUBLE_HW = GS + '!' + '\x11';
+            const MAX_CHARS = 32;
+
+            const leftRight = (left, right) => {
+                let lStr = String(left);
+                let rStr = String(right);
+                if (lStr.length + rStr.length > MAX_CHARS - 1) { lStr = lStr.substring(0, MAX_CHARS - rStr.length - 2) + ".."; }
+                let spaces = Math.max(0, MAX_CHARS - lStr.length - rStr.length);
+                return lStr + " ".repeat(spaces) + rStr;
+            };
+            const divider = "-".repeat(MAX_CHARS) + "\n";
+
+            let ticketTxt = INIT;
+            ticketTxt += ALIGN_CENTER;
+            ticketTxt += BOLD_ON + TEXT_DOUBLE_HW + "HUARACHES LA 18\n" + TEXT_NORMAL + BOLD_OFF;
+            ticketTxt += BOLD_ON + tipoServicio + "\n" + BOLD_OFF;
+            ticketTxt += date + "\n";
+            ticketTxt += BOLD_ON + "FOLIO: #" + order.id.toString().substring(0,6) + "\n" + BOLD_OFF;
+            
+            ticketTxt += ALIGN_LEFT;
+            ticketTxt += divider;
+            ticketTxt += BOLD_ON + "CTE: " + BOLD_OFF + limpiarTexto(order.cliente_nombre) + "\n";
+            ticketTxt += BOLD_ON + "TEL: " + BOLD_OFF + order.cliente_telefono + "\n";
+            if(order.salsa) ticketTxt += BOLD_ON + "SALSA: " + BOLD_OFF + limpiarTexto(order.salsa).toUpperCase() + "\n";
+            ticketTxt += divider;
+
+            if(order.nota) {
+                ticketTxt += BOLD_ON + "NOTAS O INSTRUCCIONES:\n" + BOLD_OFF + limpiarTexto(order.nota) + "\n" + divider;
+            }
+
+            if(order.detalle_json) {
+                order.detalle_json.forEach(item => {
+                    let lr = leftRight(`- ${item.qty} ${limpiarTexto(item.nombre)}`, `$${(item.price * item.qty).toFixed(0)}`);
+                    ticketTxt += BOLD_ON + TEXT_DOUBLE_HW + lr + TEXT_NORMAL + BOLD_OFF + "\n\n";
+                    const extraTxt = item.isExtra ? ` CON QUESILLO` : "";
+                    const detTxt = item.details ? ` ${limpiarTexto(item.details)}` : "";
+                    if (extraTxt || detTxt) { ticketTxt += `  ${extraTxt}${detTxt}\n\n`; }
+                });
+            }
+
+            ticketTxt += divider;
+            ticketTxt += leftRight("SUBTOTAL:", `$${subtotal.toFixed(2)}`) + "\n";
+            ticketTxt += leftRight("ENVIO:", isDelivery ? `$${envio.toFixed(2)}` : 'N/A') + "\n";
+            if(propina > 0) ticketTxt += leftRight("PROPINA:", `$${propina.toFixed(2)}`) + "\n";
+            ticketTxt += divider;
+            ticketTxt += BOLD_ON + TEXT_DOUBLE_H + leftRight("TOTAL:", `$${total.toFixed(2)}`) + TEXT_NORMAL + BOLD_OFF + "\n";
+            ticketTxt += divider;
+
+            ticketTxt += ALIGN_CENTER;
+            ticketTxt += BOLD_ON + "PAGO: " + BOLD_OFF + limpiarTexto(order.metodo_pago).toUpperCase() + "\n";
+            if (String(order.metodo_pago).toLowerCase().includes('efectivo') && order.pago_con) {
+                ticketTxt += BOLD_ON + "PAGA CON: " + BOLD_OFF + `$${order.pago_con}\n`;
+                ticketTxt += BOLD_ON + "CAMBIO: $" + (parseFloat(order.pago_con) - total).toFixed(2) + BOLD_OFF + "\n";
+            }
+            ticketTxt += "\n" + BOLD_ON + "GRACIAS POR SU COMPRA!" + BOLD_OFF + "\n\n\n\n";
+
+            const encodedB64 = btoa(unescape(encodeURIComponent(ticketTxt)));
+            const link = document.createElement('a');
+            link.href = `rawbt:base64,${encodedB64}`;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            setTimeout(() => { document.body.removeChild(link); }, 1000);
+        };
+
+        // Renderizacion de DOM Virtual para preview en pantalla de impresion web
+        const Ticket = ({ order }) => {
+            if (!order) return null;
+            const date = new Date(order.fecha || order.created_at).toLocaleString('es-MX');
+            const tipoServicio = (order.lat && order.lng && order.lat !== 0) ? 'DOMICILIO' : 'PICKUP';
+            const isDelivery = tipoServicio === 'DOMICILIO';
+            const envio = parseFloat(order.envio || 0);
+            const propina = parseFloat(order.propina || 0);
+            const total = parseFloat(order.total || 0);
+            const subtotal = total - envio - propina;
+
+            // Inyeccion de componente fuera de la jerarquia principal del DOM para prevenir colapso de estilos
+            return ReactDOM.createPortal(
+                <div id="ticket-area">
+                    <div className="ticket-header">
+                        <img src="/LOGO1.jpg" alt="Logo" className="ticket-logo" />
+                        <h2 style={{fontSize: '18px', fontWeight: 'bold'}}>HUARACHES LA 18</h2>
+                        <p style={{fontWeight:'bold', fontSize:'14px', margin:'5px 0'}}>{tipoServicio}</p>
+                        <p style={{fontSize:'12px'}}>{date}</p>
+                        <p style={{fontSize:'12px', fontWeight:'bold'}}>FOLIO: #{order.id.toString().substring(0,6)}</p>
+                    </div>
+                    <div className="ticket-divider"></div>
+                    <div>
+                        <p><strong>CTE:</strong> {limpiarTexto(order.cliente_nombre)}</p>
+                        <p><strong>TEL:</strong> {order.cliente_telefono}</p>
+                        {order.salsa && <p style={{marginTop:'5px', fontWeight:'bold'}}>SALSA: {limpiarTexto(order.salsa).toUpperCase()}</p>}
+                    </div>
+                    <div className="ticket-divider"></div>
+                    
+                    {order.nota && (
+                        <div className="ticket-box">
+                            <p style={{fontSize:'14px'}}>NOTAS O INSTRUCCIONES:</p>
+                            <p style={{fontSize:'16px', marginTop: '2px'}}>{limpiarTexto(order.nota)}</p>
+                        </div>
+                    )}
+                    
+                    <div style={{width: '100%'}}>
+                        {order.detalle_json && order.detalle_json.map((item, i) => (
+                            <div key={i} style={{marginBottom: '5px', display: 'flex', alignItems: 'flex-start'}}>
+                                <div style={{flex: '1', paddingRight: '5px'}}>
+                                    <span style={{fontWeight:'bold'}}>-{item.qty} {limpiarTexto(item.nombre)}</span>
+                                    {item.isExtra && <div style={{fontSize: '14px', fontWeight: 'bold'}}>+ QUESILLO</div>}
+                                    {item.details && <div style={{fontSize: '14px', fontStyle: 'italic'}}>{limpiarTexto(item.details)}</div>}
+                                </div>
+                                <div style={{width: '50px', textAlign: 'right', fontWeight: 'bold'}}>
+                                    ${(item.price * item.qty).toFixed(0)}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="ticket-divider"></div>
+                    
+                    <div className="ticket-totals-section">
+                        <div className="ticket-row"><span>SUBTOTAL:</span><span>${subtotal.toFixed(2)}</span></div>
+                        <div className="ticket-row"><span>ENVIO:</span><span>{isDelivery ? `$${envio.toFixed(2)}` : 'N/A'}</span></div>
+                        {propina > 0 && <div className="ticket-row"><span>PROPINA:</span><span>${propina.toFixed(2)}</span></div>}
+                        <div className="ticket-final-total ticket-row"><span>TOTAL:</span><span>${total.toFixed(2)}</span></div>
+                    </div>
+
+                    <div style={{textAlign: 'center', marginTop: '10px'}}>
+                        <p>PAGO: {limpiarTexto(order.metodo_pago).toUpperCase()}</p>
+                        {String(order.metodo_pago).toLowerCase().includes('efectivo') && order.pago_con && (
+                            <div style={{margin: '5px 0'}}>
+                                <p>PAGA CON: ${order.pago_con}</p>
+                                <p style={{fontWeight: 'bold'}}>CAMBIO: ${(order.pago_con - order.total).toFixed(2)}</p>
+                            </div>
+                        )}
+                    </div>
+                    <div className="ticket-footer"><p>GRACIAS POR SU COMPRA!</p></div>
+                </div>,
+                document.body 
+            );
+        };
+
+        const OrderCard = ({ order, onComplete, onCancel, onPrintPreview, onPrintDirect }) => {
+            const date = new Date(order.fecha || order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const handleWhatsApp = () => { window.open(`https://wa.me/?text=${generarMensajeWA(order)}`, '_blank'); };
+            const handleComplete = () => { if(confirm("¿PEDIDO DESPACHADO?")) onComplete(order.id); };
+            const handleCancel = () => { if(confirm("¿CANCELAR ESTE PEDIDO? Esta accion no se puede deshacer.")) onCancel(order.id); };
+            const mapLink = (order.lat && order.lng) ? `https://www.google.com/maps/search/?api=1&query=${order.lat},${order.lng}` : null;
+            return (
+                <div className="bg-gray-800 rounded-xl border border-gray-700 shadow-xl overflow-hidden mb-6 animate-card">
+                    <div className="bg-gray-900/50 p-4 border-b border-gray-700 flex justify-between items-center">
+                        <div><span className="bg-orange-600 text-white text-xs font-bold px-2 py-1 rounded mr-2">#{order.id.toString().substring(0,6)}</span><span className="text-gray-400 text-sm">{date}</span></div>
+                        <span className="text-xs font-bold uppercase text-orange-400 border border-orange-900 bg-orange-900/20 px-2 py-1 rounded animate-pulse">PENDIENTE</span>
+                    </div>
+                    <div className="p-4">
+                        <div className="mb-4">
+                            <h3 className="text-xl font-bold text-white leading-none">{limpiarTexto(order.cliente_nombre)}</h3>
+                            <a href={`tel:${order.cliente_telefono}`} className="text-orange-400 text-sm hover:underline flex items-center gap-1 mt-1">TEL: {order.cliente_telefono}</a>
+                            {order.salsa && (<div className="mt-2 inline-block bg-red-600 border border-red-400 text-white text-sm font-black px-3 py-1 rounded-lg uppercase tracking-wide">SALSA: {limpiarTexto(order.salsa)}</div>)}
+                        </div>
+                        <div className="bg-gray-900/50 rounded-lg p-3 mb-4 space-y-2 border border-gray-700/50">
+                            {order.detalle_json && order.detalle_json.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-start text-sm border-b border-gray-700/50 pb-2 last:border-0 last:pb-0">
+                                    <div className="text-gray-200"><span className="font-bold text-orange-500 mr-1">{item.qty}x</span> {limpiarTexto(item.nombre)}{item.isExtra && <span className="text-yellow-500 text-xs ml-1 font-bold">+Quesillo</span>}{item.details && <p className="text-gray-500 text-xs pl-6 italic">{limpiarTexto(item.details)}</p>}</div>
+                                    <span className="font-mono text-gray-400">${(item.price * item.qty).toFixed(2)}</span>
+                                </div>
+                            ))}
+                            {order.nota && <div className="mt-2 bg-yellow-900/20 text-yellow-200 text-xs p-2 rounded border border-yellow-900/30">NOTA: <strong>{limpiarTexto(order.nota)}</strong></div>}
+                        </div>
+                        <div className="flex justify-between items-end mb-4 border-t border-gray-700 pt-3">
+                            <div className="text-sm"><p className="text-gray-400 uppercase font-bold text-xs">Pago</p><p className="text-white font-medium flex items-center gap-1">{order.metodo_pago === 'efectivo' ? <Icons.Menu /> : <Icons.Check />} {limpiarTexto(order.metodo_pago).toUpperCase()}</p>{String(order.metodo_pago).toLowerCase().includes('efectivo') && order.pago_con && <p className="text-green-400 text-xs font-bold mt-1">Cambio: <span className="text-white">${(order.pago_con - order.total).toFixed(2)}</span></p>}</div>
+                            <div className="text-right"><p className="text-3xl font-black text-white tracking-tighter">${order.total}</p></div>
+                        </div>
+                        
+                        <div className="grid grid-cols-6 gap-1.5">
+                            {mapLink ? <a href={mapLink} target="_blank" className="col-span-1 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-600/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all"><Icons.MapPin /><span className="text-[8px] font-bold mt-1">MAPA</span></a> : <div className="col-span-1 bg-gray-700/50 text-gray-500 rounded-xl flex flex-col items-center justify-center p-2 opacity-50 cursor-not-allowed"><Icons.MapPin /><span className="text-[8px] font-bold mt-1">SIN GPS</span></div>}
+                            <button onClick={handleWhatsApp} className="col-span-1 bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white border border-blue-500/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all"><Icons.Whatsapp /><span className="text-[8px] font-bold mt-1">WHATSAPP</span></button>
+                            <button onClick={() => onPrintPreview(order)} className="col-span-1 bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-600/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all"><Icons.Eye /><span className="text-[8px] font-bold mt-1">PREVIA</span></button>
+                            <button onClick={() => onPrintDirect(order)} className="col-span-1 bg-gray-700 hover:bg-gray-600 text-white border border-gray-600 rounded-xl flex flex-col items-center justify-center p-2 transition-all"><Icons.Printer /><span className="text-[8px] font-bold mt-1">PRINT</span></button>
+                            <button onClick={handleCancel} className="col-span-1 bg-red-900/30 hover:bg-red-600 text-red-500 hover:text-white border border-red-600/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all"><Icons.XCircle /><span className="text-[8px] font-bold mt-1">CANCELA</span></button>
+                            <button onClick={handleComplete} className="col-span-1 bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white border border-green-600/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all"><Icons.Check /><span className="text-[8px] font-bold mt-1">LISTO</span></button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Modal Inteligente: Detecta si es Creacion o Edicion de entidades
+        const Modal=({isOpen,onClose,type,editItem,categories,onSave})=>{
+            const[form,setForm]=useState({});
+            const[newTopping,setNewTopping]=useState("");
+            const[toppingsList,setToppingsList]=useState([]);
+            
+            useEffect(()=>{
+                if(isOpen){
+                    if(editItem) {
+                        setForm(editItem);
+                        setToppingsList(editItem.toppings || []);
+                    } else {
+                        setForm(type==='product'?{categoria_id:categories[0]?.id}:{});
+                        setToppingsList([]);
+                    }
+                    setNewTopping("");
+                }
+            },[isOpen,type,categories,editItem]);
+            
+            if(!isOpen)return null;
+            
+            const handleAddTopping=()=>{if(newTopping.trim()!==""){setToppingsList([...toppingsList,newTopping.trim()]);setNewTopping("")}};
+            const removeTopping=(idx)=>{setToppingsList(toppingsList.filter((_,i)=>i!==idx))};
+            
+            const handleSubmit=(e)=>{
+                e.preventDefault();
+                const finalData=type==='category'?{...form,toppings:toppingsList}:form;
+                onSave(finalData, editItem?.id);
+                onClose();
+            };
+            
+            return(
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="bg-gray-800 w-full max-w-md rounded-2xl p-6 border border-gray-700 shadow-2xl overflow-y-auto max-h-[90vh]">
+                        <h2 className="text-2xl font-bold text-white mb-4">
+                            {editItem ? (type==='category' ? 'Editar Categoria' : 'Editar Producto') : (type==='category' ? 'Nueva Categoria' : 'Nuevo Producto')}
+                        </h2>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-gray-400 text-sm mb-1">Nombre</label>
+                                <input required value={form.nombre || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none" onChange={e=>setForm({...form,nombre:e.target.value})}/>
+                            </div>
+                            
+                            {type==='category'&&(
+                                <>
+                                    <div>
+                                        <label className="block text-gray-400 text-sm mb-1">Nota Cocina</label>
+                                        <input value={form.nota_preparacion || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" placeholder="Ej: Plato hondo..." onChange={e=>setForm({...form,nota_preparacion:e.target.value})}/>
+                                    </div>
+                                    <div className="p-3 bg-gray-900 rounded-xl border border-gray-700">
+                                        <label className="block text-orange-400 text-sm font-bold mb-2">Toppings / Preparaciones</label>
+                                        <div className="flex gap-2 mb-2">
+                                            <input className="flex-1 bg-gray-800 border border-gray-600 rounded-lg p-2 text-white text-sm outline-none" placeholder="Ej: Sin Cebolla" value={newTopping} onChange={(e)=>setNewTopping(e.target.value)} onKeyDown={(e)=>e.key==='Enter'&&(e.preventDefault(),handleAddTopping())}/>
+                                            <button type="button" onClick={handleAddTopping} className="bg-gray-700 px-3 rounded-lg text-white hover:bg-gray-600"><Icons.Plus/></button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {toppingsList.map((t,i)=>(
+                                                <span key={i} className="bg-orange-600/20 text-orange-200 text-xs px-2 py-1 rounded-full flex items-center gap-1 border border-orange-600/40">{t}
+                                                    <button type="button" onClick={()=>removeTopping(i)} className="hover:text-white"><Icons.XCircle/></button>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            
+                            {type==='product'&&(
+                                <>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-gray-400 text-sm mb-1">Precio Base</label>
+                                            <input required type="number" value={form.precio || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" onChange={e=>setForm({...form,precio:e.target.value})}/>
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-400 text-sm mb-1">Costo Extra Quesillo</label>
+                                            <input type="number" value={form.quesillo_extra_precio || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" placeholder="0" onChange={e=>setForm({...form,quesillo_extra_precio:e.target.value})}/>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-gray-400 text-sm mb-1">Categoria</label>
+                                        <select value={form.categoria_id || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" onChange={e=>setForm({...form,categoria_id:e.target.value})}>
+                                            {categories.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+                            <button type="submit" className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-bold py-3 rounded-xl mt-4">GUARDAR</button>
+                            <button type="button" onClick={onClose} className="w-full text-gray-400 py-2">Cancelar</button>
+                        </form>
+                    </div>
+                </div>
+            )
+        };
+
+        const App = () => {
+            const [session, setSession] = useState(null);
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [loginError, setLoginError] = useState('');
+            const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+
+            const [view,setView]=useState('inventory');
+            const [storeOpen,setStoreOpen]=useState(true);
+            const [categories,setCategories]=useState([]);
+            const [products,setProducts]=useState([]);
+            const [orders,setOrders]=useState([]);
+            const [activeCat,setActiveCat]=useState('');
+            const [search,setSearch]=useState('');
+            const [modal,setModal]=useState({open:false, type:null, editItem:null});
+            const [loading,setLoading]=useState(true);
+            const [ticketOrder,setTicketOrder]=useState(null);
+
+            // Gestion de estado para persistencia de notificacion auditiva
+            const [unacknowledgedOrders, setUnacknowledgedOrders] = useState([]);
+
+            const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('la18_autoprint') === 'true');
+            const autoPrintRef = useRef(autoPrint);
+            
+            useEffect(() => {
+                localStorage.setItem('la18_autoprint', autoPrint);
+                autoPrintRef.current = autoPrint;
+            }, [autoPrint]);
+
+            useEffect(() => {
+                if (supabase) {
+                    supabase.auth.getSession().then(({ data: { session } }) => {
+                        setSession(session);
+                        setIsCheckingAuth(false);
+                    });
+                    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                        setSession(session);
+                    });
+                    return () => subscription.unsubscribe();
+                } else {
+                    setIsCheckingAuth(false);
+                }
+            }, []);
+
+            // Extraccion asincrona de esquemas relacionales
+            const fetchData=useCallback(async()=>{
+                if(!supabase || !session) return;
+                const{data:config}=await supabase.from('config_tienda').select('abierto').eq('id',1).single();
+                if(config)setStoreOpen(config.abierto);
+                const{data:cats}=await supabase.from('categorias').select('*').order('orden');
+                const{data:prods}=await supabase.from('menu_items').select('*');
+                setCategories(cats||[]);setProducts(prods||[]);
+                if(cats&&cats.length>0&&!activeCat)setActiveCat(cats[0].nombre);
+                const{data:ords}=await supabase.from('pedidos').select('*').eq('status','pendiente').order('fecha',{ascending:false});
+                setOrders(ords||[]);
+                setLoading(false);
+            },[activeCat, session]);
+
+            // Suscripcion a sockets para actualizacion en tiempo real
+            useEffect(()=>{
+                if (session) {
+                    fetchData();
+                    if(supabase){
+                        const ordersChannel=supabase.channel('admin_orders').on('postgres_changes',{event:'*',schema:'public',table:'pedidos'},(payload)=>{
+                            if(payload.eventType==='INSERT') {
+                                setOrders(prev=>[payload.new,...prev]);
+                                
+                                setUnacknowledgedOrders(prev => [...prev, payload.new.id]);
+                                alertSound.play().catch(e=>console.log(e));
+
+                                if (autoPrintRef.current) { setTimeout(() => imprimirTicketDirecto(payload.new), 800); }
+                            } else if(payload.eventType==='UPDATE'&&payload.new.status!=='pendiente') {
+                                setOrders(prev=>prev.filter(o=>o.id!==payload.new.id));
+                            }
+                        }).subscribe();
+                        return()=>{supabase.removeChannel(ordersChannel)}
+                    }
+                }
+            },[session]);
+
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setLoginError('');
+                const { data, error } = await supabase.auth.signInWithPassword({ email: email, password: password });
+                if (error) setLoginError('Correo o contraseña incorrectos');
+            };
+
+            const handleLogout = async () => { await supabase.auth.signOut(); };
+            
+            // Actualizacion de estatus de transaccion en BD
+            const handleCompleteOrder = async(id) => {
+                setOrders(prev=>prev.filter(o=>o.id!==id));
+                await supabase.from('pedidos').update({status:'entregado'}).eq('id',id);
+            };
+
+            const handleCancelOrder = async(id) => {
+                setOrders(prev=>prev.filter(o=>o.id!==id));
+                await supabase.from('pedidos').update({status:'cancelado'}).eq('id',id);
+            };
+
+            const toggleStore=async()=>{const newState=!storeOpen;setStoreOpen(newState);if(supabase)await supabase.from('config_tienda').upsert({id:1,abierto:newState})};
+            
+            const toggleProduct=async(id,currentStatus)=>{setProducts(prev=>prev.map(p=>p.id===id?{...p,disponible:!currentStatus}:p));if(supabase)await supabase.from('menu_items').update({disponible:!currentStatus}).eq('id',id)};
+            
+            // Mutacion masiva de disponibilidad por categoria (Toggle All)
+            const toggleCategoryAvailability = async (categoryId, items) => {
+                if(!items || items.length === 0) return;
+                const areAllAvailable = items.every(item => item.disponible);
+                const newStatus = !areAllAvailable;
+                
+                setProducts(prev => prev.map(p => p.categoria_id === categoryId ? { ...p, disponible: newStatus } : p));
+                
+                if (supabase) {
+                    await supabase.from('menu_items').update({ disponible: newStatus }).eq('categoria_id', categoryId);
+                }
+            };
+
+            const deleteProduct=async(id)=>{if(!confirm("Borrar producto?"))return;setProducts(prev=>prev.filter(p=>p.id!==id));if(supabase)await supabase.from('menu_items').delete().eq('id',id)};
+            const deleteCategory=async(id)=>{if(!confirm("Estas seguro?"))return;await supabase.from('menu_items').delete().eq('categoria_id',id);await supabase.from('categorias').delete().eq('id',id);setCategories(prev=>prev.filter(c=>c.id!==id));if(categories.find(c=>c.id===id)?.nombre===activeCat){const remaining=categories.filter(c=>c.id!==id);if(remaining.length>0)setActiveCat(remaining[0].nombre)}};
+            
+            // Administracion y Persistencia de Inventario (Soporte CRUD completo)
+            const saveItem=async(data, editId)=>{
+                if(editId){
+                    const table = modal.type === 'category' ? 'categorias' : 'menu_items';
+                    const { id, items, created_at, ...updateData } = data; // Sanitizacion de payload
+                    const { error } = await supabase.from(table).update(updateData).eq('id', editId);
+                    if(!error) fetchData();
+                } else {
+                    if(modal.type==='category'){
+                        const maxOrd=categories.length>0?Math.max(...categories.map(c=>c.orden)):0;
+                        const{error}=await supabase.from('categorias').insert([{...data,orden:maxOrd+1}]);
+                        if(!error)fetchData();
+                    }else{
+                        const maxOrd=products.length>0?Math.max(...products.map(p=>p.orden)):0;
+                        const{error}=await supabase.from('menu_items').insert([{...data,disponible:true,orden:maxOrd+10}]);
+                        if(!error)fetchData();
+                    }
+                }
+            };
+
+            const handlePrintPreview=(order)=>{setTicketOrder(order);setTimeout(()=>{window.print()},500)};
+            
+            // Evaluacion condicional de modificacion de costos directos en UI
+            const updatePrice = async (id, newVal, oldVal) => {
+                const parsed = parseFloat(newVal);
+                if (isNaN(parsed) || parsed === parseFloat(oldVal)) return;
+                setProducts(prev => prev.map(p => p.id === id ? { ...p, precio: parsed } : p));
+                if (supabase) await supabase.from('menu_items').update({ precio: parsed }).eq('id', id);
+            };
+
+            const processedInventory=useMemo(()=>{if(!categories.length)return[];let activeCats=search?categories:categories.filter(c=>c.nombre===activeCat);return activeCats.map(cat=>{let items=products.filter(p=>p.categoria_id===cat.id&&p.nombre.toLowerCase().includes(search.toLowerCase()));items.sort((a,b)=>a.orden-b.orden);return{...cat,items}}).filter(c=>c.items.length>0||(!search&&c.nombre===activeCat))},[categories,products,activeCat,search]);
+            const pendingOrdersCount=orders.length;
+
+            if (isCheckingAuth) return <div className="min-h-screen flex items-center justify-center bg-gray-900"><div className="loader"></div></div>;
+
+            // Renderizacion de modulo de autenticacion
+            if (!session) {
+                return (
+                    <div className="relative min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-yellow-400 via-orange-500 to-red-600 animate-card">
+                        <div className="fixed inset-0 z-0 bg-orange-500 pointer-events-none"><div className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-overlay transition-opacity duration-700" style={{ backgroundImage: `url(/LOGO1.jpg)` }} /></div>
+                        
+                        <div className="bg-gray-800 p-8 rounded-3xl shadow-2xl border border-gray-700 w-full max-w-sm text-center relative z-10 overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-red-600"></div>
+                            <div className="w-20 h-20 bg-gray-900 rounded-full mx-auto mb-6 flex items-center justify-center border-4 border-gray-700 shadow-inner"><Icons.Lock /></div>
+                            <h2 className="text-2xl font-black text-white mb-2 tracking-widest">SISTEMA ADMIN</h2>
+                            <p className="text-gray-500 text-sm mb-6">Solo personal autorizado</p>
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                <input type="email" placeholder="Correo administrador..." value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-gray-900 text-white p-4 rounded-xl border border-gray-600 focus:border-orange-500 outline-none text-center text-sm shadow-inner" required />
+                                <input type="password" placeholder="Contraseña..." value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-gray-900 text-white p-4 rounded-xl border border-gray-600 focus:border-orange-500 outline-none text-center text-sm shadow-inner" required />
+                                {loginError && <p className="text-red-400 text-xs font-bold">{loginError}</p>}
+                                <button type="submit" className="w-full bg-gradient-to-r from-orange-500 to-red-600 hover:brightness-110 text-white font-black py-4 rounded-xl transition-all active:scale-95 shadow-lg shadow-orange-500/20 mt-2">ENTRAR AL PANEL</button>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            if(loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900"><div className="loader"></div></div>;
+            
+            // Modulo Principal Administrativo
+            return(
+                <div className="relative min-h-screen bg-gradient-to-br from-yellow-400 via-orange-500 to-red-600 pb-20">
+                    <div className="fixed inset-0 z-0 bg-orange-500 pointer-events-none"><div className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-overlay" style={{ backgroundImage: `url(/LOGO1.jpg)` }} /></div>
+
+                    {unacknowledgedOrders.length > 0 && (
+                        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                            <div className="bg-gray-800 rounded-3xl shadow-2xl p-8 max-w-sm w-full text-center border-4 border-orange-500 animate-pulse">
+                                <div className="text-6xl mb-4">🔔</div>
+                                <h2 className="text-3xl font-black text-white mb-6 uppercase">¡NUEVO PEDIDO!</h2>
+                                <button 
+                                    onClick={() => {
+                                        alertSound.pause();
+                                        alertSound.currentTime = 0;
+                                        setUnacknowledgedOrders([]);
+                                    }} 
+                                    className="w-full bg-gradient-to-r from-green-500 to-green-600 hover:brightness-110 text-white font-black py-5 rounded-xl text-2xl shadow-lg active:scale-95 transition-all"
+                                >
+                                    ENTERADO
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="relative z-10">
+                        <header className="bg-gray-800/95 backdrop-blur-md border-b border-gray-700 sticky top-0 z-50 p-4 shadow-xl">
+                            <div className="flex flex-col md:flex-row justify-between items-center mb-4 gap-3">
+                                <div>
+                                    <h1 className="text-xl font-black text-white tracking-widest flex items-center gap-2">ADMIN PANEL <button onClick={handleLogout} className="text-[10px] bg-red-900/50 hover:bg-red-600 border border-red-700 text-red-200 px-2 py-1 rounded ml-2 transition-colors">SALIR</button></h1>
+                                    <p className="text-xs text-gray-400">Huaraches La 18</p>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <div className="flex items-center gap-2 bg-gray-900 p-2 rounded-lg border border-gray-700">
+                                        <Icons.Printer />
+                                        <span className={`text-xs font-bold ${autoPrint ? 'text-blue-400' : 'text-gray-500'}`}>AUTO-PRINT</span>
+                                        <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                            <input type="checkbox" id="togglePrint" checked={autoPrint} onChange={() => setAutoPrint(!autoPrint)} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 transform translate-x-0 checked:translate-x-full checked:border-blue-400"/>
+                                            <label htmlFor="togglePrint" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors ${autoPrint ? 'bg-blue-400' : 'bg-gray-600'}`}></label>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3 bg-gray-900 p-2 rounded-lg border border-gray-700">
+                                        <span className={`text-xs font-bold ${storeOpen?'text-green-500':'text-red-500'}`}>{storeOpen?'ABIERTO':'CERRADO'}</span>
+                                        <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                            <input type="checkbox" name="toggle" id="toggle" checked={storeOpen} onChange={toggleStore} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 transform translate-x-0 checked:translate-x-full checked:border-green-400"/>
+                                            <label htmlFor="toggle" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors ${storeOpen?'bg-green-400':'bg-gray-600'}`}></label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={()=>setView('inventory')} className={`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${view==='inventory'?'bg-orange-600 text-white shadow-lg':'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}><Icons.Menu/> INVENTARIO</button>
+                                <button onClick={()=>setView('orders')} className={`flex-1 py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${view==='orders'?'bg-orange-600 text-white shadow-lg':'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}><Icons.Moto/> PEDIDOS {pendingOrdersCount>0&&<span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full animate-pulse shadow-md">{pendingOrdersCount}</span>}</button>
+                            </div>
+                        </header>
+                        
+                        {view==='inventory'&&(<div className="p-4 animate-card"><div className="sticky top-[130px] z-40 bg-gray-800/95 backdrop-blur py-2 -mx-4 px-4 border-b border-gray-700 shadow-sm"><div className="relative mb-3"><input type="text" placeholder="Buscar producto..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full bg-gray-900 text-white p-3 pl-10 rounded-xl border border-gray-600 focus:border-orange-500 outline-none"/><div className="absolute left-3 top-3.5 text-gray-500"><Icons.Search/></div></div>{!search&&(<div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">{categories.map(c=>(<button key={c.id} onClick={()=>setActiveCat(c.nombre)} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold border transition-colors ${activeCat===c.nombre?'bg-white text-black border-white':'bg-gray-900 text-gray-400 border-gray-700'}`}>{c.nombre}</button>))}</div>)}</div><div className="space-y-8 mt-4">{processedInventory.map(cat=>(<div key={cat.id} className="bg-gray-800/80 p-4 rounded-2xl shadow-xl border border-gray-700"><div className="flex justify-between items-center border-b border-gray-700 pb-2 mb-3"><div><h2 className="text-orange-400 font-bold text-lg flex items-center gap-3">{cat.nombre} 
+                        
+                        {/* Switch maestro para alternar toda la categoria */}
+                        <div className="relative inline-block w-8 align-middle select-none transition duration-200 ease-in">
+                            <input type="checkbox" checked={cat.items.length > 0 && cat.items.every(i => i.disponible)} onChange={() => toggleCategoryAvailability(cat.id, cat.items)} className="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-2 appearance-none cursor-pointer transition-all duration-300 transform translate-x-0 checked:translate-x-full checked:border-green-400"/>
+                            <label className={`toggle-label block overflow-hidden h-4 rounded-full cursor-pointer transition-colors ${cat.items.length > 0 && cat.items.every(i => i.disponible) ? 'bg-green-500' : 'bg-gray-600'}`}></label>
+                        </div>
+                        
+                        </h2>{cat.nota_preparacion&&<p className="text-xs text-gray-400">{cat.nota_preparacion}</p>}{cat.toppings&&cat.toppings.length>0&&<div className="flex flex-wrap gap-1 mt-1">{cat.toppings.map((t,idx)=><span key={idx} className="text-[10px] bg-gray-700 text-gray-300 px-1.5 rounded border border-gray-600">{t}</span>)}</div>}</div>
+                        <div className="flex gap-2">
+                            <button onClick={()=>setModal({open:true, type:'category', editItem:cat})} className="bg-blue-900/20 text-blue-400 p-2 rounded-lg hover:bg-blue-900/40"><Icons.Edit/></button>
+                            <button onClick={()=>deleteCategory(cat.id)} className="bg-red-900/20 text-red-400 p-2 rounded-lg hover:bg-red-900/40"><Icons.Trash/></button>
+                        </div>
+                        </div><div className="grid grid-cols-2 gap-3">{cat.items.map(item=>(<div key={item.id} className={`relative p-3 rounded-xl border flex flex-col justify-between ${item.disponible?'bg-gray-900 border-gray-700 shadow-inner':'bg-gray-900/50 border-red-900/50 opacity-60'}`}>
+                            <div className="absolute top-2 right-2 flex gap-1">
+                                <button onClick={()=>setModal({open:true, type:'product', editItem:item})} className="text-gray-500 hover:text-blue-500 p-1 bg-gray-800/80 rounded"><Icons.Edit/></button>
+                                <button onClick={()=>deleteProduct(item.id)} className="text-gray-500 hover:text-red-500 p-1 bg-gray-800/80 rounded"><Icons.Trash/></button>
+                            </div>
+                            <div className="mb-2 pr-12"><h3 className="font-bold text-white leading-tight text-sm">{item.nombre}</h3>
+                        <div className="flex items-center gap-1 mt-1">
+                            <span className="text-gray-400 text-xs">$</span>
+                            <input 
+                                type="number" 
+                                defaultValue={item.precio} 
+                                onBlur={(e) => updatePrice(item.id, e.target.value, item.precio)}
+                                className="bg-gray-800 text-orange-400 font-bold text-xs px-1 py-0.5 rounded w-16 outline-none border border-gray-700 focus:border-orange-500 transition-colors"
+                            />
+                        </div>
+                        </div><button onClick={()=>toggleProduct(item.id,item.disponible)} className={`w-full py-2 rounded-lg text-xs font-bold transition-colors mt-2 ${item.disponible?'bg-green-600/20 text-green-400 border border-green-600/50':'bg-red-600/20 text-red-400 border border-red-600/50'}`}>{item.disponible?'DISPONIBLE':'AGOTADO'}</button></div>))}</div></div>))}</div><div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50"><button onClick={()=>setModal({open:true,type:'category', editItem:null})} className="bg-gray-800 text-white p-3 rounded-full shadow-lg border border-gray-600 hover:scale-105 transition"><span className="text-xs font-bold">CAT</span></button><button onClick={()=>setModal({open:true,type:'product', editItem:null})} className="bg-gray-900 text-white p-4 rounded-full shadow-xl border-2 border-orange-500 hover:scale-110 transition active:scale-95"><Icons.Plus/></button></div></div>)}
+                        
+                        {view==='orders'&&(<div className="p-4 animate-card"><h2 className="text-white text-xs font-bold uppercase tracking-widest mb-4 bg-gray-900/50 inline-block px-3 py-1 rounded-lg backdrop-blur-sm border border-gray-700">Pedidos Entrantes</h2>{orders.length===0?(<div className="text-center py-20 bg-gray-800/80 rounded-2xl shadow-xl border border-gray-700"><p className="text-white font-bold">Sin pedidos pendientes</p></div>):(orders.map(order=>(<OrderCard key={order.id} order={order} onComplete={handleCompleteOrder} onCancel={handleCancelOrder} onPrintPreview={handlePrintPreview} onPrintDirect={imprimirTicketDirecto}/>)))}</div>)}
+                        
+                        <Modal isOpen={modal.open} type={modal.type} editItem={modal.editItem} categories={categories} onClose={()=>setModal({open:false,type:null,editItem:null})} onSave={saveItem}/>
+                        <Ticket order={ticketOrder}/>
+                    </div>
+                </div>
+            )
+        };
+        
+        const root=ReactDOM.createRoot(document.getElementById('root'));root.render(<App/>);
+    </script>
+</body>
+</html>

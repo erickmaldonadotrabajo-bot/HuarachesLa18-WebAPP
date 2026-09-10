@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <!-- Configuraciones base del documento HTML5 para evitar zoom indeseado y adaptar a resoluciones moviles -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ADMIN SAAS | Panel de Control</title>
+    
+    <!-- Vinculo al icono representativo que aparecera en la pestaña del navegador -->
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/900/900797.png">
+    
+    <!-- Importacion del framework Tailwind CSS mediante CDN para utilidades de maquetado -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Importacion de la libreria React, ReactDOM y Babel para el procesamiento en vivo de JSX -->
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+    
+    <!-- Cliente oficial de Supabase para transacciones relacionales con la base de datos PostgreSQL -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+    <style>
+        /* Importacion de tipografia Poppins y definicion de estilos base del panel oscuro */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700;900&display=swap');
+        
+        body { 
+            font-family: 'Poppins', sans-serif; 
+            background-color: #111827; 
+            color: white; 
+        }
+        
+        /* Estas dos clases ocultan las barras de desplazamiento manteniendo activa la funcion de scroll */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Configuracion de animacion base para la entrada fluida de las tarjetas de pedidos */
+        .animate-card { animation: fade-in-up 0.3s ease-out forwards; }
+        @keyframes fade-in-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+        
+        /* Reglas CSS para transformar checkboxes HTML genericos en interruptores deslizables tipo toggle */
+        .toggle-checkbox:checked { right: 0; border-color: #68D391; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #68D391; }
+
+        /* Contenedor ancla para el ticket que permanece oculto en pantalla pero se utiliza en el buffer de impresion */
+        #ticket-area {
+            position: fixed; top: 0; left: -9999px; width: 58mm;
+            background-color: white; color: black; z-index: -1;
+        }
+
+        /* Reglas CSS estrictas que aplican unicamente durante el evento window.print() para impresoras termicas de 58mm ESC/POS */
+        @media print {
+            @page { size: 58mm auto; margin: 0mm; }
+            body { margin: 0; padding: 0; background-color: white; }
+            body * { visibility: hidden; height: 0; overflow: hidden; }
+            
+            #ticket-area {
+                visibility: visible; position: absolute; left: 0 !important; top: 0 !important;
+                width: 58mm !important; height: auto !important; overflow: visible !important;
+                padding: 5px 10px 20px 5px; z-index: 9999;
+                background-color: white !important; color: black !important;
+                font-family: 'Courier New', Courier, monospace; font-size: 17px; line-height: 1.1; text-transform: uppercase;
+            }
+            #ticket-area * { visibility: visible; height: auto; color: black !important; }
+            .ticket-header { text-align: center; margin-bottom: 10px; display: flex; flex-direction: column; align-items: center; }
+            .ticket-logo { width: 60px; height: 60px; border-radius: 50%; margin-bottom: 5px; background-color: white; filter: grayscale(100%) contrast(100%) brightness(110%); object-fit: cover; }
+            .ticket-divider { border-bottom: 2px dashed #000; margin: 5px 0; width: 100%; }
+            .ticket-totals-section { text-align: right; margin-top: 5px; border-top: 1px solid #000; padding-top: 5px; }
+            .ticket-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+            .ticket-final-total { font-weight: 900; font-size: 16px; border-top: 2px solid #000; padding-top: 5px; margin-top: 2px; }
+            .ticket-footer { text-align: center; margin-top: 15px; font-size: 12px; padding-bottom: 10px; }
+            .ticket-box { border: 2px solid #000; padding: 5px; margin: 5px 0; font-weight: bold; text-align: left; font-size: 11px;}
+        }
+
+        /* Animacion de pulso configurada en color verde para la alerta visual de nuevos pedidos */
+        @keyframes alert-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+        .new-order-alert { animation: alert-pulse 2s infinite; }
+    </style>
+</head>
+<body>
+    <!-- Contenedor root requerido por ReactDOM para iniciar la aplicacion -->
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module" data-presets="react">
+        // Importacion de los hooks base de React necesarios para gestionar ciclo de vida y variables mutables
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+        // Captura del identificador numerico de la tienda a traves del string de consulta URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const TIENDA_ID = parseInt(urlParams.get('tienda')) || 1;
+
+        // Instanciacion del cliente Supabase con credenciales de proyecto publicas
+        const SUPABASE_URL = 'https://srhdgocsmswxidrwguhc.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_pWKDoEBfP3l2ggqYh_l7IA_SNq1Esfz';
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        // Elemento global de audio mp3 configurado en bucle. Emite un sonido de campanilla suave de recepcion
+        const alertSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3');
+        alertSound.loop = true;
+
+        // Matriz constante de funciones SVG utilizadas como logotipos iconograficos en toda la interfaz
+        const Icons = {
+            Menu: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>,
+            Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
+            Plus: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>,
+            Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+            Edit: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>,
+            Check: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>,
+            Moto: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+            Printer: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>,
+            MapPin: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+            X: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>,
+            Whatsapp: () => <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.711 2.592 2.654-.696c1.029.575 1.943.889 3.149.889 3.182 0 5.768-2.587 5.769-5.766.001-3.181-2.584-5.768-5.766-5.768zm7.118 9.318c-1.286 1.983-3.295 3.174-5.786 3.18-4.496.007-8.15-3.647-8.161-8.143-.005-2.091.737-4.053 2.193-5.612 1.547-1.656 3.612-2.569 5.867-2.574 4.497-.006 8.15 3.649 8.162 8.144.005 1.921-.617 3.771-2.064 5.25l-.211-.245z"/></svg>,
+            Upload: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>,
+            Settings: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
+            Lock: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>,
+            Cancel: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg>,
+            Chart: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+        };
+
+        // Funcion auxiliar disenada para normalizar cadenas de texto eliminando diacriticos que causan errores en buffer de impresoras termicas
+        const limpiarTexto = (t) => t ? String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "").trim() : "";
+
+        // Modulo React Portal que inyecta el codigo HTML del ticket fuera de la jerarquia nativa del DOM para la API window.print()
+        const Ticket = ({ order, tienda }) => {
+            if (!order || !tienda) return null;
+            const date = new Date(order.created_at).toLocaleString('es-MX');
+            const isDelivery = order.tipo_entrega === 'delivery';
+
+            return ReactDOM.createPortal(
+                <div id="ticket-area">
+                    <div className="ticket-header">
+                        <img src={tienda.logo_url || "https://cdn-icons-png.flaticon.com/512/900/900797.png"} alt="Logo" className="ticket-logo" />
+                        <h2 style={{fontSize: '16px', fontWeight: 'bold'}}>{tienda.nombre}</h2>
+                        <p style={{fontWeight:'bold', fontSize:'14px', margin:'5px 0'}}>{isDelivery ? 'DOMICILIO' : 'PICKUP'}</p>
+                        <p style={{fontSize:'12px'}}>{date}</p>
+                        <p style={{fontSize:'12px', fontWeight:'bold'}}>FOLIO: #{order.id}</p>
+                    </div>
+                    <div className="ticket-divider"></div>
+                    <div>
+                        <p><strong>CTE:</strong> {limpiarTexto(order.cliente_nombre)}</p>
+                        <p><strong>TEL:</strong> {order.cliente_telefono}</p>
+                        {order.respuestas_checkout && Object.keys(order.respuestas_checkout).map(k => (
+                            <p key={k} style={{marginTop:'5px', fontWeight:'bold'}}>{limpiarTexto(k).toUpperCase()}: {limpiarTexto(order.respuestas_checkout[k]).toUpperCase()}</p>
+                        ))}
+                    </div>
+                    <div className="ticket-divider"></div>
+                    {order.nota_cliente && (
+                        <div className="ticket-box">
+                            <p style={{fontSize:'14px'}}>NOTAS O INSTRUCCIONES:</p>
+                            <p style={{fontSize:'16px', marginTop: '2px'}}>{limpiarTexto(order.nota_cliente)}</p>
+                        </div>
+                    )}
+                    <div style={{width: '100%'}}>
+                        {order.detalle_json && order.detalle_json.map((item, i) => (
+                            <div key={i} style={{marginBottom: '5px', display: 'flex', alignItems: 'flex-start'}}>
+                                <div style={{flex: '1', paddingRight: '5px'}}>
+                                    <span style={{fontWeight:'bold'}}>-{item.qty} {limpiarTexto(item.nombre)}</span>
+                                    {item.isExtra && <div style={{fontSize: '14px', fontWeight: 'bold'}}>+ {item.extraAppliedName}</div>}
+                                    {item.details && <div style={{fontSize: '14px', fontStyle: 'italic'}}>{limpiarTexto(item.details)}</div>}
+                                </div>
+                                <div style={{width: '50px', textAlign: 'right', fontWeight: 'bold'}}>${(item.price * item.qty).toFixed(0)}</div>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="ticket-divider"></div>
+                    <div className="ticket-totals-section">
+                        <div className="ticket-row"><span>SUBTOTAL:</span><span>${parseFloat(order.total_subtotal).toFixed(2)}</span></div>
+                        <div className="ticket-row"><span>ENVIO:</span><span>{isDelivery ? `$${parseFloat(order.total_envio).toFixed(2)}` : 'N/A'}</span></div>
+                        {order.total_propina > 0 && <div className="ticket-row"><span>PROPINA:</span><span>${parseFloat(order.total_propina).toFixed(2)}</span></div>}
+                        <div className="ticket-final-total ticket-row"><span>TOTAL:</span><span>${parseFloat(order.total_final).toFixed(2)}</span></div>
+                    </div>
+                    <div style={{textAlign: 'center', marginTop: '10px'}}>
+                        <p>PAGO: {limpiarTexto(order.metodo_pago)}</p>
+                        {String(order.metodo_pago).toLowerCase().includes('efectivo') && order.pago_con && (
+                            <div style={{margin: '5px 0'}}>
+                                <p>PAGA CON: ${order.pago_con}</p>
+                                <p style={{fontWeight: 'bold'}}>CAMBIO: ${(order.pago_con - order.total_final).toFixed(2)}</p>
+                            </div>
+                        )}
+                    </div>
+                    <div className="ticket-footer"><p>GRACIAS POR SU PREFERENCIA!</p></div>
+                </div>,
+                document.body
+            );
+        };
+
+        // Componente Card renderizado dentro del bucle de la vista principal "Orders". Representa visual y logica de una orden de compra especifica
+        const OrderCard = ({ order, tienda, onComplete, onPrint, onCancel }) => {
+            const date = new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            
+            // Re-compilador de matriz JSON que empaqueta las propiedades transaccionales en un blob codificado de URL para invocacion API de WhatsApp
+            const handleWhatsApp = () => {
+                const title = order.tipo_entrega === 'delivery' ? "PEDIDO A DOMICILIO" : "PEDIDO PICKUP";
+                let texto = `*${title}*\n\n`;
+                texto += `*CLIENTE: ${limpiarTexto(order.cliente_nombre)}*\n\n`;
+                texto += `*TEL: ${order.cliente_telefono}*\n\n`;
+                
+                if (order.respuestas_checkout) {
+                    Object.keys(order.respuestas_checkout).forEach(k => { texto += `*${limpiarTexto(k).toUpperCase()}:* ${limpiarTexto(order.respuestas_checkout[k])}\n`; });
+                }
+                
+                texto += `----------------\n`;
+                if (order.detalle_json) order.detalle_json.forEach(item => { texto += `*${item.qty}x ${limpiarTexto(item.nombre)}* ${item.details ? '('+limpiarTexto(item.details)+')' : ''}${item.isExtra ? ' +'+limpiarTexto(item.extraAppliedName) : ''}\n`; });
+                if(order.nota_cliente) texto += `\nNOTA: ${limpiarTexto(order.nota_cliente)}\n`;
+                
+                texto += `----------------\n\n`;
+                texto += `*TOTAL: $${parseFloat(order.total_final).toFixed(2)}*\n\n`;
+                texto += `PAGO: ${limpiarTexto(order.metodo_pago)}\n\n`;
+                
+                if (String(order.metodo_pago).toLowerCase().includes('efectivo') && order.pago_con) {
+                    const cambio = parseFloat(order.pago_con) - parseFloat(order.total_final);
+                    texto += `*EFECTIVO (Con $${order.pago_con})*\n*CAMBIO: $${cambio > 0 ? cambio.toFixed(2) : '0.00'}*\n\n`;
+                }
+                
+                if (order.latitud && order.longitud) texto += `UBICACION: https://www.google.com/maps/search/?api=1&query=${order.latitud},${order.longitud}`;
+                else texto += `UBICACION: (Pendiente)`;
+                
+                window.open(`https://wa.me/${tienda.telefono_whatsapp}?text=${encodeURIComponent(texto)}`, '_blank');
+            };
+
+            const handleComplete = () => { if(confirm("¿PEDIDO DESPACHADO?")) onComplete(order.id); };
+            
+            // Escudo de seguridad (Gatekeeper) que intercepta el intento de eliminacion logica obligando a cruzar la variable de sesion del owner local
+            const handleCancelClick = () => {
+                const pin = prompt("Introduce el PIN de administrador para cancelar este pedido:");
+                if (pin === null) return; 
+                
+                if (pin === (tienda.admin_pin || '1234')) {
+                    onCancel(order.id);
+                } else {
+                    alert("PIN incorrecto. Operacion cancelada.");
+                }
+            };
+
+            const mapLink = (order.latitud && order.longitud) ? `https://www.google.com/maps/search/?api=1&query=${order.latitud},${order.longitud}` : null;
+            
+            return (
+                <div className="bg-gray-800 rounded-xl border border-gray-700 shadow-xl overflow-hidden mb-6 animate-card">
+                    
+                    <div className="bg-gray-900/50 p-4 border-b border-gray-700 flex justify-between items-center">
+                        <div>
+                            <span className="bg-orange-600 text-white text-xs font-bold px-2 py-1 rounded mr-2">#{order.id}</span>
+                            <span className="text-gray-400 text-sm">{date}</span>
+                        </div>
+                        <span className={`text-xs font-bold uppercase px-2 py-1 rounded border ${order.tipo_entrega==='delivery'?'text-orange-400 border-orange-900 bg-orange-900/20':'text-purple-400 border-purple-900 bg-purple-900/20'}`}>
+                            {order.tipo_entrega === 'delivery' ? 'DOMICILIO' : 'PICKUP'}
+                        </span>
+                    </div>
+
+                    <div className="p-4">
+                        
+                        <div className="mb-4">
+                            <h3 className="text-xl font-bold text-white leading-none">{limpiarTexto(order.cliente_nombre)}</h3>
+                            <a href={`tel:${order.cliente_telefono}`} className="text-orange-400 text-sm hover:underline flex items-center gap-1 mt-1">TEL: {order.cliente_telefono}</a>
+                            {order.respuestas_checkout && Object.keys(order.respuestas_checkout).map(k => (
+                                <div key={k} className="mt-2 mr-2 inline-block bg-blue-900/50 border border-blue-700 text-blue-200 text-xs font-black px-2 py-1 rounded-lg uppercase tracking-wide">{k}: {order.respuestas_checkout[k]}</div>
+                            ))}
+                        </div>
+                        
+                        <div className="bg-gray-900/50 rounded-lg p-3 mb-4 space-y-2 border border-gray-700/50">
+                            {order.detalle_json && order.detalle_json.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-start text-sm border-b border-gray-700/50 pb-2 last:border-0 last:pb-0">
+                                    <div className="text-gray-200"><span className="font-bold text-orange-500 mr-1">{item.qty}x</span> {limpiarTexto(item.nombre)}{item.isExtra && <span className="text-yellow-500 text-xs ml-1 font-bold">+{item.extraAppliedName}</span>}{item.details && <p className="text-gray-500 text-xs pl-6 italic">{limpiarTexto(item.details)}</p>}</div>
+                                    <span className="font-mono text-gray-400">${(item.price * item.qty).toFixed(2)}</span>
+                                </div>
+                            ))}
+                            {order.nota_cliente && <div className="mt-2 bg-yellow-900/20 text-yellow-200 text-xs p-2 rounded border border-yellow-900/30">NOTA: <strong>{limpiarTexto(order.nota_cliente)}</strong></div>}
+                        </div>
+                        
+                        <div className="flex justify-between items-end mb-4 border-t border-gray-700 pt-3">
+                            <div className="text-sm">
+                                <p className="text-gray-400 uppercase font-bold text-xs">Pago</p>
+                                <p className="text-white font-medium flex items-center gap-1"><Icons.Check /> {limpiarTexto(order.metodo_pago).toUpperCase()}</p>
+                                {String(order.metodo_pago).toLowerCase().includes('efectivo') && order.pago_con && <p className="text-green-400 text-xs font-bold mt-1">Cambio: <span className="text-white">${(order.pago_con - order.total_final).toFixed(2)}</span></p>}
+                            </div>
+                            <div className="text-right">
+                                <p className="text-3xl font-black text-white tracking-tighter">${parseFloat(order.total_final).toFixed(2)}</p>
+                            </div>
+                        </div>
+                        
+                        {/* Grilla tactica configurada en columnas para inyectar logica operativa local en iteracion sobre orden especifica */}
+                        <div className="grid grid-cols-3 gap-2 mt-2">
+                            <button onClick={handleCancelClick} className="col-span-1 bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white border border-red-600/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all">
+                                <Icons.Cancel />
+                                <span className="text-[10px] font-bold mt-1">CANCELAR</span>
+                            </button>
+                            
+                            {mapLink ? (
+                                <a href={mapLink} target="_blank" className="col-span-1 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white border border-blue-600/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all">
+                                    <Icons.MapPin />
+                                    <span className="text-[10px] font-bold mt-1">MAPA</span>
+                                </a>
+                            ) : (
+                                <div className="col-span-1 bg-gray-700/50 text-gray-500 rounded-xl flex flex-col items-center justify-center p-2 opacity-50 cursor-not-allowed">
+                                    <Icons.MapPin />
+                                    <span className="text-[10px] font-bold mt-1">SIN GPS</span>
+                                </div>
+                            )}
+
+                            <button onClick={handleWhatsApp} className="col-span-1 bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white border border-green-600/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all">
+                                <Icons.Whatsapp />
+                                <span className="text-[10px] font-bold mt-1">WHATSAPP</span>
+                            </button>
+                            
+                            <button onClick={() => window.alert("Para vista previa, activa tu impresora.")} className="col-span-1 bg-purple-600/20 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-600/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all opacity-50 cursor-not-allowed">
+                                <Icons.Search />
+                                <span className="text-[10px] font-bold mt-1">PREVIA</span>
+                            </button>
+
+                            <button onClick={() => onPrint(order)} className="col-span-1 bg-gray-700 hover:bg-gray-600 text-white border border-gray-600 rounded-xl flex flex-col items-center justify-center p-2 transition-all">
+                                <Icons.Printer />
+                                <span className="text-[10px] font-bold mt-1">IMPRIMIR</span>
+                            </button>
+
+                            <button onClick={handleComplete} className="col-span-1 bg-orange-600/20 hover:bg-orange-600 text-orange-500 hover:text-white border border-orange-600/50 rounded-xl flex flex-col items-center justify-center p-2 transition-all">
+                                <Icons.Check />
+                                <span className="text-[10px] font-bold mt-1">LISTO</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Componente transitorio sobrepuesto (Modal) instanciado para ejecuciones mutables (INSERT / UPDATE) hacia categorias o productos en BD
+        const Modal = ({isOpen, onClose, type, editItem, categories, onSave}) => {
+            const [form, setForm] = useState({});
+            const [newTopping, setNewTopping] = useState("");
+            const [toppingsList, setToppingsList] = useState([]);
+            
+            // Vinculacion bidireccional reactiva. Sincroniza la representacion local del modal en base al bloque que el usuario esta editando actualmente
+            useEffect(() => {
+                if (isOpen) {
+                    if (editItem) { 
+                        setForm(editItem); 
+                        setToppingsList(editItem.removables || []); 
+                    } else { 
+                        setForm(type === 'product' ? { categoria_id: categories[0]?.id } : {}); 
+                        setToppingsList([]); 
+                    }
+                    setNewTopping("");
+                }
+            }, [isOpen, type, categories, editItem]);
+            
+            if (!isOpen) return null;
+            
+            const handleAddTopping = () => { 
+                if (newTopping.trim() !== "") { 
+                    setToppingsList([...toppingsList, newTopping.trim()]); 
+                    setNewTopping(""); 
+                } 
+            };
+            const removeTopping = (idx) => { 
+                setToppingsList(toppingsList.filter((_, i) => i !== idx)); 
+            };
+            
+            const handleSubmit = (e) => { 
+                e.preventDefault(); 
+                const finalData = type === 'category' ? { ...form, removables: toppingsList } : form; 
+                onSave(finalData, editItem?.id); 
+                onClose(); 
+            };
+
+            return (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+                    <div className="bg-gray-800 w-full max-w-md rounded-2xl p-6 border border-gray-700 shadow-2xl overflow-y-auto max-h-[90vh]">
+                        <h2 className="text-2xl font-bold text-white mb-4">{editItem ? 'Editar' : 'Nuevo'} {type === 'category' ? 'Categoría' : 'Producto'}</h2>
+                        
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-gray-400 text-sm mb-1">Nombre</label>
+                                <input required value={form.nombre || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white focus:border-orange-500 outline-none" onChange={e => setForm({...form, nombre: e.target.value})} />
+                            </div>
+                            
+                            {/* Renderizado logico condicional: Campos exclusivos para la inyeccion de Categorias Generales */}
+                            {type === 'category' && (
+                                <>
+                                    <div>
+                                        <label className="block text-gray-400 text-sm mb-1">Nota Cocina</label>
+                                        <input value={form.nota_preparacion || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" placeholder="Ej: Plato hondo..." onChange={e => setForm({...form, nota_preparacion: e.target.value})} />
+                                    </div>
+                                    <div className="p-3 bg-gray-900 rounded-xl border border-gray-700">
+                                        <label className="block text-orange-400 text-sm font-bold mb-2">Ingredientes Removibles</label>
+                                        <div className="flex gap-2 mb-2">
+                                            <input className="flex-1 bg-gray-800 border border-gray-600 rounded-lg p-2 text-white text-sm outline-none" placeholder="Ej: Cebolla" value={newTopping} onChange={(e) => setNewTopping(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddTopping())} />
+                                            <button type="button" onClick={handleAddTopping} className="bg-gray-700 px-3 rounded-lg text-white hover:bg-gray-600"><Icons.Plus /></button>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {toppingsList.map((t, i) => (
+                                                <span key={i} className="bg-orange-600/20 text-orange-200 text-xs px-2 py-1 rounded-full flex items-center gap-1 border border-orange-600/40">{t}<button type="button" onClick={() => removeTopping(i)} className="hover:text-white"><Icons.X /></button></span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            
+                            {/* Renderizado logico condicional: Campos exclusivos para la inyeccion de items secundarios dependientes */}
+                            {type === 'product' && (
+                                <>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div><label className="block text-gray-400 text-sm mb-1">Precio Base</label><input required type="number" value={form.precio || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" onChange={e => setForm({...form, precio: e.target.value})} /></div>
+                                        <div><label className="block text-gray-400 text-sm mb-1">Costo Extra ($)</label><input type="number" value={form.extra_precio || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" placeholder="0" onChange={e => setForm({...form, extra_precio: e.target.value})} /></div>
+                                    </div>
+                                    <div><label className="block text-gray-400 text-sm mb-1">Nombre del Extra</label><input type="text" value={form.extra_name || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" placeholder="Ej: Con Quesillo" onChange={e => setForm({...form, extra_name: e.target.value, has_extra: !!e.target.value})} /></div>
+                                    <div>
+                                        <label className="block text-gray-400 text-sm mb-1">Categoría</label>
+                                        <select value={form.categoria_id || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" onChange={e => setForm({...form, categoria_id: e.target.value})}>
+                                            {categories.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                                        </select>
+                                    </div>
+                                </>
+                            )}
+                            
+                            <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl mt-4">GUARDAR</button>
+                            <button type="button" onClick={onClose} className="w-full text-gray-400 py-2">Cancelar</button>
+                        </form>
+                    </div>
+                </div>
+            );
+        };
+
+        // Instanciador transaccional padre que rige toda logica base, consultas relacionales directas via API, ruteos inter-componentes y subscripciones socket
+        const App = () => {
+            // Evaluadores iniciales pasivos que cruzan valores localstorage de la actual sesion abierta contra credenciales persistentes por tienda
+            const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem(`admin_auth_${TIENDA_ID}`) === 'true');
+            const [pinInput, setPinInput] = useState('');
+            const [loginError, setLoginError] = useState(false);
+
+            // Modulos de estado encargados de controlar la insercion asincrona en memoria para hidratar matrices locales de DB
+            const [view, setView] = useState('orders');
+            const [tienda, setTienda] = useState(null);
+            const [categories, setCategories] = useState([]);
+            const [products, setProducts] = useState([]);
+            const [orders, setOrders] = useState([]);
+            const [activeCat, setActiveCat] = useState('');
+            const [search, setSearch] = useState('');
+            const [modal, setModal] = useState({open: false, type: null, editItem: null});
+            const [loading, setLoading] = useState(true);
+            const [ticketOrder, setTicketOrder] = useState(null);
+            const [toastMsg, setToastMsg] = useState('');
+            
+            // Estado reactivo disparador de la alerta intrusiva de pantalla completa para notificar un nuevo ticket
+            const [hasNewOrder, setHasNewOrder] = useState(false);
+
+            // Modulos estaticos independientes creados unicamente para almacenamiento temporal en extraccion estadistica historica (Metricas transaccionales)
+            const [stats, setStats] = useState({
+                ventasSemana: 0,
+                ventasMes: 0,
+                canceladosSemana: 0,
+                canceladosMes: 0,
+                masVendido: '-',
+                menosVendido: '-'
+            });
+
+            // Declaraciones logicas atadas a eventos perifericos interactivos sobre configuraciones del usuario
+            const [configForm, setConfigForm] = useState(null);
+            const [uploadingLogo, setUploadingLogo] = useState(false);
+            const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('saas_autoprint') === 'true');
+            const autoPrintRef = useRef(autoPrint);
+            
+            // Receptor de cache que clona booleanos en Local Storage previniendo el apagado forzado del checkbox "Auto Print" al recargar la web
+            useEffect(() => {
+                localStorage.setItem('saas_autoprint', autoPrint);
+                autoPrintRef.current = autoPrint;
+            }, [autoPrint]);
+
+            // Desplegador temporal de alertas flotantes, sanitizado para invocar solo "setToastMsg" neutralizando la interrupcion logica fatal en DOM
+            const showToast = useCallback((msg) => { 
+                setToastMsg(msg); 
+                setTimeout(() => setToastMsg(''), 3000); 
+            }, []);
+
+            // ==========================================================
+            // SUB RUTINA: ALGORITMO COMPILADOR DE METRICAS
+            // ==========================================================
+            const loadStats = async () => {
+                try {
+                    const date30DaysAgo = new Date();
+                    date30DaysAgo.setDate(date30DaysAgo.getDate() - 30);
+                    
+                    const date7DaysAgo = new Date();
+                    date7DaysAgo.setDate(date7DaysAgo.getDate() - 7);
+
+                    const { data, error } = await supabase
+                        .from('pedidos')
+                        .select('estado, total_final, detalle_json, created_at')
+                        .eq('tienda_id', TIENDA_ID)
+                        .gte('created_at', date30DaysAgo.toISOString());
+
+                    if (error || !data) return;
+
+                    let vSemana = 0; let vMes = 0;
+                    let cSemana = 0; let cMes = 0;
+                    let productsCount = {};
+
+                    data.forEach(p => {
+                        const isSemana = new Date(p.created_at) >= date7DaysAgo;
+                        
+                        if (p.estado === 'despachado') {
+                            vMes += parseFloat(p.total_final) || 0;
+                            if (isSemana) vSemana += parseFloat(p.total_final) || 0;
+
+                            const items = Array.isArray(p.detalle_json) ? p.detalle_json : (typeof p.detalle_json === 'string' ? JSON.parse(p.detalle_json) : []);
+                            items.forEach(item => {
+                                productsCount[item.nombre] = (productsCount[item.nombre] || 0) + (item.qty || 1);
+                            });
+                        } else if (p.estado === 'cancelado') {
+                            cMes += 1;
+                            if (isSemana) cSemana += 1;
+                        }
+                    });
+
+                    let maxSold = '-'; let minSold = '-';
+                    let maxCount = -1; let minCount = Infinity;
+                    
+                    Object.entries(productsCount).forEach(([name, count]) => {
+                        if (count > maxCount) { maxCount = count; maxSold = name; }
+                        if (count < minCount) { minCount = count; minSold = name; }
+                    });
+
+                    setStats({
+                        ventasSemana: vSemana,
+                        ventasMes: vMes,
+                        canceladosSemana: cSemana,
+                        canceladosMes: cMes,
+                        masVendido: maxCount > -1 ? `${maxSold} (${maxCount})` : 'Sin datos',
+                        menosVendido: minCount < Infinity ? `${minSold} (${minCount})` : 'Sin datos'
+                    });
+                } catch (e) {
+                    console.error("Error al cargar stats:", e);
+                }
+            };
+
+            // Transaccion de red prioritaria inicial que pre-descarga todos los parametros operativos, inventarios de tablas locales y registros vivos
+            const fetchData = useCallback(async () => {
+                if (!supabase) return;
+                
+                const { data: t } = await supabase.from('tiendas').select('*').eq('id', TIENDA_ID).single();
+                setTienda(t);
+                setConfigForm(t);
+                
+                const { data: cats } = await supabase.from('categorias').select('*').eq('tienda_id', TIENDA_ID).order('orden');
+                const { data: prods } = await supabase.from('menu_items').select('*').eq('tienda_id', TIENDA_ID).order('orden');
+                
+                setCategories(cats || []); 
+                setProducts(prods || []);
+                if (cats && cats.length > 0 && !activeCat) setActiveCat(cats[0].nombre);
+                
+                const { data: ords } = await supabase.from('pedidos').select('*').eq('tienda_id', TIENDA_ID).eq('estado', 'pendiente').order('created_at', {ascending: false});
+                setOrders(ords || []);
+                
+                loadStats();
+                setLoading(false);
+            }, [activeCat]);
+
+            // Pipeline conector Socket que provee comunicacion bi-direccional instantanea de PostgreSQL inyectando filas nativas o anulando dependencias en DOM local
+            useEffect(() => {
+                if (isAuthenticated) {
+                    fetchData();
+                    const ordersChannel = supabase.channel('admin_orders_' + TIENDA_ID)
+                        .on('postgres_changes', { event: '*', schema: 'public', table: 'pedidos', filter: `tienda_id=eq.${TIENDA_ID}` }, (payload) => {
+                            if (payload.eventType === 'INSERT') {
+                                setOrders(prev => [payload.new, ...prev]);
+                                
+                                // Ejecucion combinada para activar el bloqueo de UI y el sonido de alerta al recibir un webhook local de Supabase
+                                setHasNewOrder(true);
+                                alertSound.play().catch(e=>console.log("Audio play blocked"));
+                                
+                                if (autoPrintRef.current) {
+                                    setTicketOrder(payload.new);
+                                    setTimeout(() => window.print(), 800);
+                                }
+                            } else if (payload.eventType === 'UPDATE' && payload.new.estado !== 'pendiente') {
+                                setOrders(prev => prev.filter(o => o.id !== payload.new.id));
+                            }
+                        }).subscribe();
+                        
+                    return () => { supabase.removeChannel(ordersChannel); };
+                }
+            }, [isAuthenticated, fetchData]);
+
+            // Rutina purificadora en linea para restablecer las variables desencadenadoras del evento Modal de nuevo pedido
+            const acknowledgeNewOrder = () => {
+                setHasNewOrder(false);
+                alertSound.pause();
+                alertSound.currentTime = 0;
+            };
+
+            // Extractor de base de datos comparando credenciales codificadas directas a campo contra input string local. Autoriza acceso a ruteo en UI general
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                setLoginError(false);
+                const { data, error } = await supabase.from('tiendas').select('admin_pin').eq('id', TIENDA_ID).single();
+                
+                if (error || !data) {
+                    setLoginError(true);
+                    return;
+                }
+
+                const correctPin = data.admin_pin || '1234';
+                if (pinInput === correctPin) {
+                    setIsAuthenticated(true);
+                    localStorage.setItem(`admin_auth_${TIENDA_ID}`, 'true');
+                } else {
+                    setLoginError(true);
+                }
+            };
+
+            const handleLogout = () => {
+                setIsAuthenticated(false);
+                localStorage.removeItem(`admin_auth_${TIENDA_ID}`);
+                setPinInput('');
+            };
+
+            // Constructor logico que transmite buffers binarios al bucket de archivo publico de supabase recuperando y ligando strings url como retorno funcional
+            const handleLogoUpload = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                setUploadingLogo(true);
+                try {
+                    const fileExt = file.name.split('.').pop();
+                    const fileName = `logo_${TIENDA_ID}_${Date.now()}.${fileExt}`;
+                    const filePath = `${fileName}`;
+
+                    const { error: uploadError } = await supabase.storage.from('logos').upload(filePath, file);
+                    if (uploadError) throw uploadError;
+
+                    const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(filePath);
+
+                    setConfigForm(prev => ({ ...prev, logo_url: publicUrl }));
+                    showToast('Logo subido exitosamente. No olvides guardar cambios.');
+                } catch (err) {
+                    console.error("Error subiendo logo:", err);
+                    showToast('Error al subir. Revisa las politicas del Bucket.');
+                } finally {
+                    setUploadingLogo(false);
+                }
+            };
+
+            // Constructor transaccional (Update) del modulo de ajustes consolidando el objeto integro antes de lanzar la modificacion via RESTful
+            const saveStoreSettings = async (e) => {
+                e.preventDefault();
+                const updateData = {
+                    nombre: configForm.nombre,
+                    telefono_whatsapp: configForm.telefono_whatsapp,
+                    logo_url: configForm.logo_url,
+                    mensaje_bienvenida: configForm.mensaje_bienvenida,
+                    mensaje_cerrado: configForm.mensaje_cerrado,
+                    horarios_texto: configForm.horarios_texto,
+                    color_primario: configForm.color_primario,
+                    color_secundario: configForm.color_secundario,
+                    color_fondo: configForm.color_fondo,
+                    latitud: parseFloat(configForm.latitud),
+                    longitud: parseFloat(configForm.longitud),
+                    porcentaje_tarjeta: parseFloat(configForm.porcentaje_tarjeta),
+                    datos_bancarios: configForm.datos_bancarios,
+                    max_delivery_radius: parseFloat(configForm.max_delivery_radius),
+                    delivery_tiers: Array.isArray(configForm.delivery_tiers) ? configForm.delivery_tiers : []
+                };
+
+                if (configForm.admin_pin && configForm.admin_pin.trim() !== '') {
+                    updateData.admin_pin = configForm.admin_pin.trim();
+                }
+
+                try {
+                    const { error } = await supabase.from('tiendas').update(updateData).eq('id', TIENDA_ID);
+                    if (error) throw error;
+                    
+                    setTienda({...tienda, ...updateData});
+                    showToast('¡Ajustes guardados correctamente!');
+                } catch (err) {
+                    console.error(err);
+                    showToast('Error al guardar ajustes.');
+                }
+            };
+
+            const handleTierChange = (index, field, value) => {
+                const safeTiers = Array.isArray(configForm.delivery_tiers) ? configForm.delivery_tiers : [];
+                const newTiers = [...safeTiers];
+                newTiers[index] = { ...newTiers[index] };
+                newTiers[index][field] = field === 'name' ? value : parseFloat(value) || 0;
+                setConfigForm({...configForm, delivery_tiers: newTiers});
+            };
+
+            // Gateways transaccionales simples que mutan parametros especificos local y remotamente de manera atomica (Aperturas, Precios y Despachos)
+            const handleCompleteOrder = async (id) => { 
+                setOrders(prev => prev.filter(o => o.id !== id)); 
+                await supabase.from('pedidos').update({ estado: 'despachado' }).eq('id', id); 
+                loadStats();
+            };
+
+            const handleCancelOrder = async (id) => { 
+                setOrders(prev => prev.filter(o => o.id !== id)); 
+                await supabase.from('pedidos').update({ estado: 'cancelado' }).eq('id', id); 
+                showToast("Pedido Cancelado Exitosamente");
+                loadStats();
+            };
+
+            const toggleStore = async () => { 
+                const newState = !tienda.abierto; 
+                setTienda({...tienda, abierto: newState}); 
+                
+                try {
+                    const { error } = await supabase.from('tiendas').update({ abierto: newState }).eq('id', TIENDA_ID); 
+                    if(error) throw error;
+                    showToast(newState ? "✅ Tienda ABIERTA" : "🛑 Tienda CERRADA");
+                } catch (err) {
+                    showToast("Error de red.");
+                    setTienda({...tienda, abierto: !newState});
+                }
+            };
+            
+            const toggleProduct = async (id, currentStatus) => { 
+                setProducts(prev => prev.map(p => p.id === id ? { ...p, disponible: !currentStatus } : p)); 
+                await supabase.from('menu_items').update({ disponible: !currentStatus }).eq('id', id); 
+            };
+            
+            const guardarPrecio = async (id, nuevoPrecio) => { 
+                if(isNaN(nuevoPrecio)) return; 
+                await supabase.from('menu_items').update({ precio: nuevoPrecio }).eq('id', id); 
+            };
+            
+            const deleteProduct = async (id) => { 
+                if(!confirm("Borrar producto?")) return; 
+                setProducts(prev => prev.filter(p => p.id !== id)); 
+                await supabase.from('menu_items').delete().eq('id', id); 
+            };
+            
+            const deleteCategory = async (id) => { 
+                if(!confirm("Borrar categoria y productos?")) return; 
+                await supabase.from('categorias').delete().eq('id', id); 
+                setCategories(prev => prev.filter(c => c.id !== id)); 
+            };
+            
+            const saveItem = async (data, editId) => {
+                if (editId) {
+                    const table = modal.type === 'category' ? 'categorias' : 'menu_items';
+                    await supabase.from(table).update(data).eq('id', editId);
+                } else {
+                    if (modal.type === 'category') {
+                        const maxOrd = categories.length > 0 ? Math.max(...categories.map(c => c.orden)) : 0;
+                        await supabase.from('categorias').insert([{ ...data, tienda_id: TIENDA_ID, orden: maxOrd + 1 }]);
+                    } else {
+                        const maxOrd = products.length > 0 ? Math.max(...products.map(p => p.orden)) : 0;
+                        await supabase.from('menu_items').insert([{ ...data, tienda_id: TIENDA_ID, disponible: true, orden: maxOrd + 1 }]);
+                    }
+                }
+                fetchData();
+            };
+
+            const handlePrint = (order) => { 
+                setTicketOrder(order); 
+                setTimeout(() => { window.print(); }, 500); 
+            };
+
+            // Optimizador Memoizado del DOM Virtual; clasifica interacciones via input text barriendo en arrays filtrados re-hidratando grillas de inventario 
+            const processedInventory = useMemo(() => {
+                if (!categories.length) return [];
+                let activeCats = search ? categories : categories.filter(c => c.nombre === activeCat);
+                
+                return activeCats.map(cat => {
+                    let items = products.filter(p => p.categoria_id === cat.id && p.nombre.toLowerCase().includes(search.toLowerCase()));
+                    items.sort((a, b) => a.orden - b.orden);
+                    return { ...cat, items };
+                }).filter(c => c.items.length > 0 || (!search && c.nombre === activeCat));
+            }, [categories, products, activeCat, search]);
+
+            // =====================================================================
+            // RENDERIZADO VISUAL - INICIO DE SESIÓN CERRADO POR AUTENTICADOR
+            // =====================================================================
+            if (!isAuthenticated) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center p-4 bg-gray-950">
+                        <div className="bg-gray-900 border border-gray-800 p-8 rounded-3xl max-w-md w-full shadow-2xl text-center animate-card">
+                            <div className="w-16 h-16 bg-orange-600/20 text-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-orange-600/30">
+                                <Icons.Lock />
+                            </div>
+                            <h1 className="text-2xl font-black text-white tracking-wide mb-2">Panel Administrativo</h1>
+                            <p className="text-gray-400 text-sm mb-6">Ingresa la contraseña de acceso para la Tienda #{TIENDA_ID}</p>
+                            
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                <input
+                                    type="password"
+                                    required
+                                    placeholder="Contraseña PIN (ej. 1234)"
+                                    value={pinInput}
+                                    onChange={e => setPinInput(e.target.value)}
+                                    className="w-full bg-gray-950 border border-gray-700 rounded-xl p-4 text-white text-center text-xl tracking-widest outline-none focus:border-orange-500 shadow-inner"
+                                />
+                                {loginError && <p className="text-red-500 text-xs font-bold">Contraseña incorrecta. Intenta de nuevo.</p>}
+                                <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg active:scale-95">
+                                    INGRESAR AL PANEL
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                );
+            }
+
+            // Validacion booleana interceptora para renderizar Spinner en caso de latencia de red contra Supabase Postgrest API
+            if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900"><div className="loader"></div></div>;
+
+            // Extraccion segura del arreglo de tarifas para evitar errores de renderizado si la propiedad de base de datos viaja como nula
+            const safeTiers = configForm && Array.isArray(configForm.delivery_tiers) ? configForm.delivery_tiers : [];
+
+            // =====================================================================
+            // RENDERIZADO VISUAL - PANEL ADMINISTRATIVO MAESTRO (DASHBOARD)
+            // =====================================================================
+            return (
+                <div className="pb-20">
+                    
+                    {/* Alerta efimera en DOM local superpuesta (Z-index top absolute) controlada via Timeout desde el hook dependiente superior */}
+                    {toastMsg && <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg z-[9999] font-bold animate-card">{toastMsg}</div>}
+                    
+                    {/* Modal Super Intrusivo Absoluto Z-Index critico que inmoviliza el viewport exigiendo interaccion humana sobre notificaciones Socket */}
+                    {hasNewOrder && (
+                        <div className="fixed inset-0 z-[99999] bg-green-900/90 backdrop-blur-md flex items-center justify-center p-4">
+                            <div className="bg-green-600 border-8 border-white p-8 md:p-12 rounded-[3rem] shadow-[0_0_100px_rgba(255,255,255,0.5)] text-center flex flex-col items-center animate-pulse">
+                                <div className="text-7xl mb-4">🛎️</div>
+                                <h1 className="text-4xl md:text-6xl font-black text-white mb-8 tracking-widest uppercase drop-shadow-lg">¡Nuevo Pedido!</h1>
+                                <button onClick={acknowledgeNewOrder} className="bg-white text-green-600 font-black text-xl md:text-3xl px-10 py-6 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-2xl">
+                                    ✅ ENTERADO (APAGAR ALARMA)
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Contenedor estatico persistente para alojamiento visual e inyeccion de metadatos estaticos y controles transversales  */}
+                    <header className="bg-gray-800 border-b border-gray-700 sticky top-0 z-50 p-4 shadow-xl">
+                        <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 mb-4">
+                            <div>
+                                <h1 className="text-xl font-black text-white tracking-widest flex items-center gap-2">ADMIN PANEL <span className="text-[10px] bg-orange-900/50 border border-orange-700 text-orange-200 px-2 py-1 rounded ml-2">Tienda #{TIENDA_ID}</span></h1>
+                                <p className="text-xs text-gray-400">{tienda?.nombre}</p>
+                            </div>
+                            
+                            <div className="flex flex-wrap items-center gap-3">
+                                
+                                <div className="flex items-center gap-2 bg-gray-900 p-2 rounded-lg border border-gray-700">
+                                    <Icons.Printer />
+                                    <span className={`text-xs font-bold ${autoPrint ? 'text-blue-400' : 'text-gray-500'}`}>AUTO-PRINT</span>
+                                    <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                        <input type="checkbox" id="togglePrint" checked={autoPrint} onChange={() => setAutoPrint(!autoPrint)} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 transform translate-x-0 checked:translate-x-full checked:border-blue-400"/>
+                                        <label htmlFor="togglePrint" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors ${autoPrint ? 'bg-blue-400' : 'bg-gray-600'}`}></label>
+                                    </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 bg-gray-900 p-2 rounded-lg border border-gray-700">
+                                    <span className={`text-xs font-bold ${tienda?.abierto ? 'text-green-500' : 'text-red-500'}`}>{tienda?.abierto ? 'ABIERTO' : 'CERRADO'}</span>
+                                    <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                        <input type="checkbox" id="toggleStore" checked={tienda?.abierto || false} onChange={toggleStore} className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer transition-all duration-300 transform translate-x-0 checked:translate-x-full checked:border-green-400"/>
+                                        <label htmlFor="toggleStore" className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer transition-colors ${tienda?.abierto ? 'bg-green-400' : 'bg-gray-600'}`}></label>
+                                    </div>
+                                </div>
+
+                                <button onClick={handleLogout} className="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/50 px-3 py-2 rounded-lg text-xs font-bold transition-all">
+                                    SALIR
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                            <button onClick={()=>setView('orders')} className={`flex-shrink-0 flex-1 min-w-[100px] py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${view==='orders' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400'}`}><Icons.Moto/> PEDIDOS {orders.length > 0 && <span className="bg-red-600 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">{orders.length}</span>}</button>
+                            <button onClick={()=>setView('inventory')} className={`flex-shrink-0 flex-1 min-w-[100px] py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${view==='inventory' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400'}`}><Icons.Menu/> INVENTARIO</button>
+                            <button onClick={()=>setView('stats')} className={`flex-shrink-0 flex-1 min-w-[100px] py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${view==='stats' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400'}`}><Icons.Chart/> MÉTRICAS</button>
+                            <button onClick={()=>setView('settings')} className={`flex-shrink-0 flex-1 min-w-[100px] py-2 rounded-lg font-bold text-sm flex items-center justify-center gap-2 ${view==='settings' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-400'}`}><Icons.Settings/> AJUSTES</button>
+                        </div>
+                    </header>
+
+                    {/* SUB-MODULO DE OPERACION: Monitor interactivo de tickets entrantes desde el cliente web publico */}
+                    {view === 'orders' && (
+                        <div className="p-4 animate-card max-w-2xl mx-auto">
+                            <h2 className="text-gray-400 text-xs font-bold uppercase tracking-widest mb-4">Pedidos Entrantes</h2>
+                            {orders.length === 0 ? (
+                                <div className="text-center py-20 text-gray-600"><p>No hay pedidos pendientes</p></div>
+                            ) : (
+                                orders.map(order => <OrderCard key={order.id} order={order} tienda={tienda} onComplete={handleCompleteOrder} onCancel={handleCancelOrder} onPrint={handlePrint} />)
+                            )}
+                        </div>
+                    )}
+
+                    {/* SUB-MODULO ANALITICO: Contenedor pasivo visual para el reporte simplificado de iteracion del metodo historico relacional superior */}
+                    {view === 'stats' && (
+                        <div className="p-4 animate-card max-w-4xl mx-auto space-y-6">
+                            <div className="flex justify-between items-end mb-4">
+                                <div>
+                                    <h2 className="text-2xl font-black text-white uppercase tracking-wider">Métricas</h2>
+                                    <p className="text-gray-400 text-sm">Rendimiento de los últimos 30 y 7 días</p>
+                                </div>
+                                <button onClick={loadStats} className="bg-gray-800 text-gray-300 hover:text-white px-4 py-2 rounded-lg border border-gray-700 text-xs font-bold active:scale-95 transition-all">↻ Actualizar</button>
+                            </div>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-gray-800 p-6 rounded-2xl border border-green-700/50 shadow-lg relative overflow-hidden">
+                                    <h3 className="text-green-400 font-bold text-xs mb-1 uppercase tracking-widest">Ingresos 7 Días</h3>
+                                    <p className="text-3xl sm:text-4xl font-black text-white">${stats.ventasSemana.toFixed(2)}</p>
+                                </div>
+                                <div className="bg-gray-800 p-6 rounded-2xl border border-green-700/50 shadow-lg relative overflow-hidden">
+                                    <h3 className="text-green-400 font-bold text-xs mb-1 uppercase tracking-widest">Ingresos 30 Días</h3>
+                                    <p className="text-3xl sm:text-4xl font-black text-white">${stats.ventasMes.toFixed(2)}</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-gray-800 p-6 rounded-2xl border border-red-700/50 shadow-lg relative overflow-hidden">
+                                    <h3 className="text-red-400 font-bold text-xs mb-1 uppercase tracking-widest">Cancelados (7 Días)</h3>
+                                    <p className="text-3xl sm:text-4xl font-black text-white">{stats.canceladosSemana} <span className="text-base text-gray-500 font-normal">pedidos</span></p>
+                                </div>
+                                <div className="bg-gray-800 p-6 rounded-2xl border border-red-700/50 shadow-lg relative overflow-hidden">
+                                    <h3 className="text-red-400 font-bold text-xs mb-1 uppercase tracking-widest">Cancelados (30 Días)</h3>
+                                    <p className="text-3xl sm:text-4xl font-black text-white">{stats.canceladosMes} <span className="text-base text-gray-500 font-normal">pedidos</span></p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-2xl border border-orange-700/50 shadow-lg relative overflow-hidden">
+                                    <h3 className="text-orange-400 font-bold text-sm mb-1 uppercase">🔥 Más Vendido (Mes)</h3>
+                                    <p className="text-xl font-bold text-white mt-2">{stats.masVendido}</p>
+                                </div>
+                                <div className="bg-gradient-to-br from-gray-800 to-gray-900 p-6 rounded-2xl border border-blue-900/50 shadow-lg relative overflow-hidden">
+                                    <h3 className="text-blue-400 font-bold text-sm mb-1 uppercase">🧊 Menos Vendido (Mes)</h3>
+                                    <p className="text-xl font-bold text-gray-300 mt-2">{stats.menosVendido}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SUB-MODULO ESTRUCTURAL: Constructor dinamico tipo CRUD iterando componentes para mapeado, modificacion local e inserciones externas via modales */}
+                    {view === 'inventory' && (
+                        <div className="p-4 animate-card max-w-4xl mx-auto">
+                            
+                            <div className="sticky top-[130px] z-40 bg-gray-900/95 backdrop-blur py-2 -mx-4 px-4 border-b border-gray-800">
+                                <div className="relative mb-3">
+                                    <input type="text" placeholder="Buscar producto..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full bg-gray-800 text-white p-3 pl-10 rounded-xl border border-gray-700 focus:border-orange-500 outline-none"/>
+                                    <div className="absolute left-3 top-3.5 text-gray-500"><Icons.Search/></div>
+                                </div>
+                                {!search && (
+                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                                        {categories.map(c => (
+                                            <button key={c.id} onClick={()=>setActiveCat(c.nombre)} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold border transition-colors ${activeCat === c.nombre ? 'bg-white text-black border-white' : 'bg-transparent text-gray-400 border-gray-600'}`}>{c.nombre}</button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="space-y-8 mt-4">
+                                {processedInventory.map(cat => (
+                                    <div key={cat.id}>
+                                        <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-3">
+                                            <div>
+                                                <h2 className="text-orange-500 font-bold text-lg">{cat.nombre}</h2>
+                                                {cat.nota_preparacion && <p className="text-xs text-gray-500">{cat.nota_preparacion}</p>}
+                                                {cat.removables && cat.removables.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{cat.removables.map((t, idx) => <span key={idx} className="text-[10px] bg-gray-700 text-gray-300 px-1.5 rounded border border-gray-600">{t}</span>)}</div>}
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={()=>setModal({open:true, type:'category', editItem:cat})} className="bg-blue-900/20 text-blue-500 p-2 rounded-lg hover:bg-blue-900/40"><Icons.Edit/></button>
+                                                <button onClick={()=>deleteCategory(cat.id)} className="bg-red-900/20 text-red-500 p-2 rounded-lg hover:bg-red-900/40"><Icons.Trash/></button>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {cat.items.map(item => (
+                                                <div key={item.id} className={`relative p-3 rounded-xl border flex flex-col justify-between ${item.disponible ? 'bg-gray-800 border-gray-700' : 'bg-gray-900 border-red-900/50 opacity-60'}`}>
+                                                    <div className="absolute top-2 right-2 flex gap-1">
+                                                        <button onClick={()=>setModal({open:true, type:'product', editItem:item})} className="text-gray-500 hover:text-blue-500 p-1"><Icons.Edit/></button>
+                                                        <button onClick={()=>deleteProduct(item.id)} className="text-gray-500 hover:text-red-500 p-1"><Icons.Trash/></button>
+                                                    </div>
+                                                    <div className="mb-2 pr-12">
+                                                        <h3 className="font-bold text-white leading-tight text-sm">{item.nombre}</h3>
+                                                        <div className="flex items-center mt-1">
+                                                            <span className="text-gray-500 text-xs">$</span>
+                                                            <input type="number" defaultValue={item.precio} onBlur={(e) => { if(e.target.value != item.precio) guardarPrecio(item.id, parseFloat(e.target.value)) }} className="bg-transparent text-gray-400 text-sm font-bold w-12 outline-none border-b border-gray-700 focus:border-orange-500 focus:text-white" />
+                                                        </div>
+                                                    </div>
+                                                    <button onClick={()=>toggleProduct(item.id, item.disponible)} className={`w-full py-2 rounded-lg text-xs font-bold transition-colors ${item.disponible ? 'bg-green-600/20 text-green-400 border border-green-600/50' : 'bg-red-600/20 text-red-400 border border-red-600/50'}`}>{item.disponible ? 'DISPONIBLE' : 'AGOTADO'}</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            
+                            <div className="fixed bottom-6 right-6 flex flex-col gap-3">
+                                <button onClick={()=>setModal({open: true, type: 'category', editItem: null})} className="bg-gray-700 text-white p-3 rounded-full shadow-lg border border-gray-600 hover:scale-105 transition"><span className="text-xs font-bold">CAT</span></button>
+                                <button onClick={()=>setModal({open: true, type: 'product', editItem: null})} className="bg-orange-600 text-white p-4 rounded-full shadow-xl shadow-orange-500/20 hover:scale-110 transition active:scale-95"><Icons.Plus/></button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SUB-MODULO MAESTRO: Entorno parametrizador global que compila las interacciones del administrador formateando metadatos para la reconstruccion dinamica visual del negocio */}
+                    {view === 'settings' && configForm && (
+                        <div className="p-4 animate-card max-w-2xl mx-auto space-y-6">
+                            <form onSubmit={saveStoreSettings}>
+                                
+                                <div className="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg mb-6">
+                                    <h3 className="text-orange-400 font-bold mb-4 uppercase tracking-widest text-sm border-b border-gray-700 pb-2">Seguridad del Panel</h3>
+                                    <div>
+                                        <label className="block text-gray-400 text-xs mb-1">Nueva Contraseña (PIN)</label>
+                                        <input type="text" placeholder="Dejar en blanco para mantener la actual" value={configForm.admin_pin || ''} onChange={e=>setConfigForm({...configForm, admin_pin: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none focus:border-orange-500 font-mono" />
+                                        <p className="text-[11px] text-gray-500 mt-1">Usa este PIN la próxima vez que quieras ingresar a administrar este negocio.</p>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg mb-6">
+                                    <h3 className="text-orange-400 font-bold mb-4 uppercase tracking-widest text-sm border-b border-gray-700 pb-2">Logotipo del Restaurante</h3>
+                                    <div className="flex flex-col sm:flex-row items-center gap-6">
+                                        <div className="w-24 h-24 rounded-full border-2 border-orange-500 overflow-hidden bg-gray-900 flex items-center justify-center shadow-inner flex-shrink-0">
+                                            {configForm.logo_url ? (
+                                                <img src={configForm.logo_url} alt="Logo" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <span className="text-xs text-gray-500">Sin Logo</span>
+                                            )}
+                                        </div>
+                                        <div className="flex-1 w-full space-y-2">
+                                            <label className="block text-gray-400 text-xs">Sube tu imagen (PNG o JPG recomendado)</label>
+                                            <div className="flex items-center gap-3">
+                                                <label className="flex-1 bg-gray-900 border border-gray-600 rounded-lg p-3 text-white text-sm cursor-pointer hover:border-orange-500 transition-colors flex items-center justify-center gap-2">
+                                                    <Icons.Upload />
+                                                    <span>{uploadingLogo ? 'Subiendo a la nube...' : 'Seleccionar archivo...'}</span>
+                                                    <input type="file" accept="image/*" onChange={handleLogoUpload} disabled={uploadingLogo} className="hidden" />
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg mb-6">
+                                    <h3 className="text-orange-400 font-bold mb-4 uppercase tracking-widest text-sm border-b border-gray-700 pb-2">Datos Generales</h3>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-gray-400 text-xs mb-1">Nombre del Restaurante</label>
+                                            <input type="text" required value={configForm.nombre} onChange={e=>setConfigForm({...configForm, nombre: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none focus:border-orange-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-400 text-xs mb-1">Teléfono (WhatsApp)</label>
+                                            <input type="text" required value={configForm.telefono_whatsapp} onChange={e=>setConfigForm({...configForm, telefono_whatsapp: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none focus:border-orange-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-400 text-xs mb-1">Mensaje de Bienvenida</label>
+                                            <input type="text" value={configForm.mensaje_bienvenida || ''} onChange={e=>setConfigForm({...configForm, mensaje_bienvenida: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none focus:border-orange-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-gray-400 text-xs mb-1">Mensaje Cerrado</label>
+                                            <input type="text" value={configForm.mensaje_cerrado || ''} onChange={e=>setConfigForm({...configForm, mensaje_cerrado: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none focus:border-orange-500" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg mb-6">
+                                    <h3 className="text-orange-400 font-bold mb-4 uppercase tracking-widest text-sm border-b border-gray-700 pb-2">Apariencia (Colores App Clientes)</h3>
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div><label className="block text-gray-400 text-xs mb-1 text-center">Primario</label><input type="color" value={configForm.color_primario} onChange={e=>setConfigForm({...configForm, color_primario: e.target.value})} className="w-full h-12 rounded cursor-pointer bg-gray-900 border border-gray-600" /></div>
+                                        <div><label className="block text-gray-400 text-xs mb-1 text-center">Secundario</label><input type="color" value={configForm.color_secundario} onChange={e=>setConfigForm({...configForm, color_secundario: e.target.value})} className="w-full h-12 rounded cursor-pointer bg-gray-900 border border-gray-600" /></div>
+                                        <div><label className="block text-gray-400 text-xs mb-1 text-center">Fondo</label><input type="color" value={configForm.color_fondo} onChange={e=>setConfigForm({...configForm, color_fondo: e.target.value})} className="w-full h-12 rounded cursor-pointer bg-gray-900 border border-gray-600" /></div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg mb-6">
+                                    <h3 className="text-orange-400 font-bold mb-4 uppercase tracking-widest text-sm border-b border-gray-700 pb-2">Ubicación y Envíos</h3>
+                                    <div className="space-y-4">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div><label className="block text-gray-400 text-xs mb-1">Latitud</label><input type="number" step="any" required value={configForm.latitud} onChange={e=>setConfigForm({...configForm, latitud: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" /></div>
+                                            <div><label className="block text-gray-400 text-xs mb-1">Longitud</label><input type="number" step="any" required value={configForm.longitud} onChange={e=>setConfigForm({...configForm, longitud: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" /></div>
+                                        </div>
+                                        <div><label className="block text-gray-400 text-xs mb-1">Radio Máximo (km)</label><input type="number" step="0.1" required value={configForm.max_delivery_radius} onChange={e=>setConfigForm({...configForm, max_delivery_radius: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" /></div>
+                                        
+                                        <div className="bg-gray-900 p-3 rounded-lg border border-gray-700">
+                                            <label className="block text-gray-400 text-xs mb-3">Tarifas de Envío por Distancia</label>
+                                            {safeTiers.map((tier, index) => (
+                                                <div key={index} className="flex gap-2 mb-2 items-center">
+                                                    <input type="number" step="0.1" placeholder="Km" value={tier.maxDistance} onChange={e => handleTierChange(index, 'maxDistance', e.target.value)} className="w-20 bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm" />
+                                                    <input type="number" step="0.1" placeholder="$ Costo" value={tier.cost} onChange={e => handleTierChange(index, 'cost', e.target.value)} className="w-20 bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm" />
+                                                    <input type="text" placeholder="Zona" value={tier.name} onChange={e => handleTierChange(index, 'name', e.target.value)} className="flex-1 bg-gray-800 border border-gray-600 rounded p-2 text-white text-sm" />
+                                                    <button type="button" onClick={() => setConfigForm({...configForm, delivery_tiers: configForm.delivery_tiers.filter((_, i) => i !== index)})} className="text-red-500 p-2"><Icons.X /></button>
+                                                </div>
+                                            ))}
+                                            <button type="button" onClick={() => setConfigForm({...configForm, delivery_tiers: [...safeTiers, {maxDistance: 5, cost: 30, name: "Zona General"}]})} className="mt-2 text-orange-400 text-sm font-bold">+ Agregar Tarifa</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-xl active:scale-95">
+                                    GUARDAR AJUSTES
+                                </button>
+                            </form>
+                        </div>
+                    )}
+
+                    <Modal isOpen={modal.open} type={modal.type} editItem={modal.editItem} categories={categories} onClose={()=>setModal({open:false, type:null, editItem:null})} onSave={saveItem}/>
+                    <Ticket order={ticketOrder} tienda={tienda}/>
+                </div>
+            );
+        };
+
+        // Inyeccion en raiz para finalizacion del ciclo de arranque del navegador
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App/>);
+    </script>
+</body>
+</html>

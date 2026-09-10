@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SUPER ADMIN | SaaS Control Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body class="bg-gray-950 text-white min-h-screen font-sans p-6">
+    <div id="root"></div>
+
+    <script type="text/babel" data-type="module" data-presets="react">
+        const { useState, useEffect } = React;
+
+        const SUPABASE_URL = 'https://srhdgocsmswxidrwguhc.supabase.co'; 
+        const SUPABASE_KEY = 'sb_publishable_pWKDoEBfP3l2ggqYh_l7IA_SNq1Esfz'; 
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const App = () => {
+            const [stores, setStores] = useState([]);
+            const [loading, setLoading] = useState(true);
+            const [toast, setToast] = useState('');
+            const [form, setForm] = useState({
+                nombre: '',
+                telefono_whatsapp: '',
+                latitud: '19.3082',
+                longitud: '-99.0812',
+                abierto: true
+            });
+
+            const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+
+            const fetchStores = async () => {
+                const { data, error } = await supabase.from('tiendas').select('*').order('id', { ascending: true });
+                if (!error) setStores(data || []);
+                setLoading(false);
+            };
+
+            useEffect(() => { fetchStores(); }, []);
+
+            const createStore = async (e) => {
+                e.preventDefault();
+                const { error } = await supabase.from('tiendas').insert([{
+                    nombre: form.nombre,
+                    telefono_whatsapp: form.telefono_whatsapp,
+                    latitud: parseFloat(form.latitud),
+                    longitud: parseFloat(form.longitud),
+                    abierto: form.abierto,
+                    color_primario: '#f97316',
+                    color_secundario: '#ef4444',
+                    color_fondo: '#111827',
+                    max_delivery_radius: 10,
+                    porcentaje_tarjeta: 0.035,
+                    delivery_tiers: [{maxDistance: 5, cost: 30, name: "Zona General"}],
+                    checkout_options: []
+                }]);
+
+                if (!error) {
+                    showToast('Tienda creada exitosamente');
+                    setForm({ nombre: '', telefono_whatsapp: '', latitud: '19.3082', longitud: '-99.0812', abierto: true });
+                    fetchStores();
+                } else {
+                    showToast('Error al crear tienda: ' + error.message);
+                }
+            };
+
+            const toggleStoreStatus = async (id, currentStatus) => {
+                const { error } = await supabase.from('tiendas').update({ abierto: !currentStatus }).eq('id', id);
+                if (!error) fetchStores();
+            };
+
+            if (loading) return <div className="text-center py-20">Cargando panel maestro...</div>;
+
+            return (
+                <div className="max-w-4xl mx-auto space-y-8">
+                    {toast && <div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-xl font-bold z-50">{toast}</div>}
+                    
+                    <header className="border-b border-gray-800 pb-4 flex justify-between items-center">
+                        <div>
+                            <h1 className="text-2xl font-black tracking-wider text-orange-500">SUPER ADMIN SAAS</h1>
+                            <p className="text-xs text-gray-400">Control central de arrendatarios y comercios</p>
+                        </div>
+                        <span className="bg-gray-900 border border-gray-800 text-gray-300 px-3 py-1 rounded-full text-xs font-mono">Total Tiendas: {stores.length}</span>
+                    </header>
+
+                    {/* Formulario Alta Rápida */}
+                    <div className="bg-gray-900 p-6 rounded-2xl border border-gray-800 shadow-2xl">
+                        <h2 className="text-lg font-bold mb-4 text-orange-400">Registrar Nueva Tienda</h2>
+                        <form onSubmit={createStore} className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Nombre del Negocio</label>
+                                <input type="text" required placeholder="Ej: Tacos El Tío" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-orange-500" />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">WhatsApp (con código país)</label>
+                                <input type="text" required placeholder="52155..." value={form.telefono_whatsapp} onChange={e => setForm({...form, telefono_whatsapp: e.target.value})} className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-orange-500" />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Latitud Base</label>
+                                <input type="number" step="any" required value={form.latitud} onChange={e => setForm({...form, latitud: e.target.value})} className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-orange-500" />
+                            </div>
+                            <div>
+                                <label className="block text-xs text-gray-400 mb-1">Longitud Base</label>
+                                <input type="number" step="any" required value={form.longitud} onChange={e => setForm({...form, longitud: e.target.value})} className="w-full bg-gray-950 border border-gray-700 rounded-xl p-3 text-white outline-none focus:border-orange-500" />
+                            </div>
+                            <div className="sm:col-span-2 flex items-center gap-3 pt-2">
+                                <input type="checkbox" id="abiertoCheck" checked={form.abierto} onChange={e => setForm({...form, abierto: e.target.checked})} className="w-5 h-5 accent-orange-500 cursor-pointer" />
+                                <label htmlFor="abiertoCheck" className="text-sm font-bold cursor-pointer">Iniciar abierto al público</label>
+                            </div>
+                            <button type="submit" className="sm:col-span-2 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg">CREAR TIENDA EN EL SISTEMA</button>
+                        </form>
+                    </div>
+
+                    {/* Listado de Tiendas */}
+                    <div className="bg-gray-900 rounded-2xl border border-gray-800 overflow-hidden shadow-2xl">
+                        <div className="p-4 border-b border-gray-800 bg-gray-950/50">
+                            <h2 className="text-sm font-bold uppercase tracking-widest text-gray-400">Comercios Activos</h2>
+                        </div>
+                        <div className="divide-y divide-gray-800">
+                            {stores.map(store => (
+                                <div key={store.id} className="p-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-gray-800/30 transition-colors">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="bg-orange-600/20 text-orange-400 border border-orange-600/40 text-xs font-mono font-bold px-2 py-0.5 rounded">ID: {store.id}</span>
+                                            <h3 className="font-bold text-lg text-white">{store.nombre}</h3>
+                                        </div>
+                                        <p className="text-xs text-gray-400 mt-1">WhatsApp: {store.telefono_whatsapp} | Lat/Lng: {store.latitud}, {store.longitud}</p>
+                                    </div>
+                                    <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                                        <button onClick={() => toggleStoreStatus(store.id, store.abierto)} className={`px-3 py-1.5 rounded-lg text-xs font-bold border ${store.abierto ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40' : 'bg-red-500/20 text-red-400 border-red-500/40'}`}>
+                                            {store.abierto ? 'ABIERTO' : 'CERRADO'}
+                                        </button>
+                                        <a href={`menus.html?tienda=${store.id}`} target="_blank" className="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-700">Ver Menú</a>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
