@@ -26,8 +26,6 @@ menor latencia posible.
 * Sincronización: WebSockets nativos para eliminar las recargas de página y 
   mantener la cocina actualizada al segundo.
 
----
-
 ## Módulos Principales
 
 ### 1. Aplicación de Clientes (menus.html)
@@ -48,10 +46,10 @@ este panel mantiene una conexión persistente con la base de datos.
 
 * Recepción de Comandas: Cuando un cliente finaliza un pedido, el panel 
   lanza una alerta sonora y visual de pantalla completa que obliga al 
-  operador a confirmar de enterado.
+  operador a confirmar de enterado
 * Motor de Impresión Térmica: Formatea los datos del pedido en un portal 
   oculto del DOM y los inyecta en el sistema operativo mediante reglas CSS 
-  estrictas, optimizadas para miniprinters de 58mm.
+  estrictas, optimizadas para miniprinters de 58mm para poder utilizar impresoras de BT
 * Gestión del Local: Permite al dueño modificar su inventario, apagar 
   productos agotados, cambiar sus colores de marca, subir su logotipo a 
   un servidor de almacenamiento y abrir/cerrar tienda y unas métricas sencillas que son: producto + y - vendido por semana/mes,
@@ -83,3 +81,29 @@ operativos:
 3. Capa Superior (OLMAIRY): Privilegios absolutos sobre la infraestructura 
    para registrar nuevos restaurantes, modificar parámetros globales o 
    suspender cuentas.
+
+### COMO ULTIMA FASE SE REALIZÓ la Migración ETL y sstabilización del SaaS (Supabase)
+
+Migración exitosa de 1,147 pedidos que se encontraban en la DB de cuando habia codigo hardcodeado en el front,
+esto se hizo para no perder los registros de que esta app ya estaba en servicio y funcionaba correctamente, ya que
+ahi la base de datos era únicamente del restaurante original HUARACHES LA 18.
+se migro a la nueva arquitectura multi-tenant, garantizando integridad referencial y métricas reales.
+
+* **Data Pruning & Esquema:** 
+  Limpieza de columnas legacy, adaptación a campos dinámicos (`JSONB`) 
+  y cumplimiento de nuevas reglas `NOT NULL`.
+
+* **Sincronización de IDs:** 
+  Truncado de tabla con `RESTART IDENTITY` y reasignación del secuenciador
+  `setval` al ID máximo para evitar colisiones en producción.
+
+* **Estandarización:** 
+  Actualización masiva de estados (`entregado` → `despachado`) para
+  habilitar el nuevo dashboard de métricas y pudiera leer los pedidos antiguos.
+
+* **Purga de Pruebas:** 
+  Eliminación condicional de registros de testeo de la app (nombres "prueba" 
+  o teléfonos ficticios "5555555555" para consolidar analíticas 100% precisas.
+
+  AHORA 10/09/2026 prácticamente están funcionando estas webapps, desplegadas en un host gratuito en Netlify y existen 2 tiendas reales
+  que se encuentra utilizando este multitenant. Gracias.
