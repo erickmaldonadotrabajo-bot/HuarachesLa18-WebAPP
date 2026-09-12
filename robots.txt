@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://huarachesla18.online/sitemap.xml
