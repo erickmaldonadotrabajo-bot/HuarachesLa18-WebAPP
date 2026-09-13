@@ -59,9 +59,8 @@
     <script type="text/babel" data-type="module" data-presets="react">
         const { useState, useEffect } = React;
 
-        // 🚀 LECTURA DINÁMICA DE LA TIENDA POR URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const TIENDA_ID = parseInt(urlParams.get('tienda')) || 1;
+        // 🚀 LECTURA DINÁMICA DE LA TIENDA POR URL (Permitimos sobreescritura con let)
+        let TIENDA_ID = parseInt(new URLSearchParams(window.location.search).get('tienda')) || 1;
 
         // Credenciales de Supabase
         const SUPABASE_URL = 'https://srhdgocsmswxidrwguhc.supabase.co'; 
@@ -71,6 +70,18 @@
         const App = () => {
             const [tienda, setTienda] = useState(null);
             const [loading, setLoading] = useState(true);
+
+            // ==========================================
+            // LOGICA INTELIGENTE DE RUTEO DE BOTONES
+            // ==========================================
+            const hostname = window.location.hostname.replace('www.', '');
+            // NOTA: Asegúrate de poner aquí tu dominio genérico real de Netlify si difiere
+            const saasDomains = ['menus-delivery.netlify.app', 'localhost', '127.0.0.1'];
+            const isCustomDomain = !saasDomains.includes(hostname);
+
+            // Armado dinámico de las URLs de destino
+            const linkMenu = isCustomDomain ? '/menus.html' : `/menus.html?tienda=${TIENDA_ID}`;
+            const linkImagenes = isCustomDomain ? '/menu-imagenes.html' : `/menu-imagenes.html?tienda=${TIENDA_ID}`;
 
             useEffect(() => {
                 const fetchTienda = async () => {
@@ -131,19 +142,19 @@
                     {/* Botonera Principal */}
                     <div className="space-y-4 relative z-20">
                         
-                        {/* Botón 1: HACER PEDIDO (Manda el ID por URL) */}
+                        {/* Botón 1: HACER PEDIDO (Usa ruteo inteligente) */}
                         <a 
-                            href={`menus.html?tienda=${TIENDA_ID}`} 
+                            href={linkMenu} 
                             className="block w-full text-white font-bold text-xl py-5 rounded-2xl shadow-lg hover:scale-105 active:scale-95 transition-all"
                             style={{ background: `linear-gradient(to right, ${tienda.color_primario || '#f97316'}, ${tienda.color_secundario || '#ef4444'})` }}
                         >
                             🛵 HACER UN PEDIDO
                         </a>
 
-                        {/* Botón 2: VER MENÚ EN IMÁGENES (Valida si existe la URL en la DB) */}
+                        {/* Botón 2: VER MENÚ EN IMÁGENES (Usa ruteo inteligente) */}
                         {tienda.menu_imagenes_url ? (
                             <a 
-                                href={`menu-imagenes.html?tienda=${TIENDA_ID}`} 
+                                href={linkImagenes} 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
                                 className="block w-full bg-gray-800 text-white font-bold text-lg py-4 rounded-2xl border-2 border-gray-700 hover:bg-gray-700 active:scale-95 transition-all"
@@ -177,8 +188,40 @@
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        // ==========================================
+        // INTERCEPTOR DE DOMINIO Y ARRANQUE SEGURO
+        // ==========================================
+        const initApp = async () => {
+            const hostname = window.location.hostname.replace('www.', '');
+            // NOTA: Asegúrate de poner aquí tu dominio genérico real de Netlify si difiere
+            const saasDomains = ['menus-delivery.netlify.app', 'localhost', '127.0.0.1'];
+            
+            if (!saasDomains.includes(hostname)) {
+                try {
+                    // Consulta con .ilike() para cazar el dominio aunque tenga https o rutas extra en la BD
+                    const { data, error } = await supabase
+                        .from('tiendas')
+                        .select('id')
+                        .ilike('dominio_personal', `%${hostname}%`)
+                        .single();
+                    
+                    if (data && data.id) {
+                        // 🔒 CANDADO CERRADO: Forzamos la Tienda dueña del dominio
+                        TIENDA_ID = data.id; 
+                        
+                        // Opcional: Como es el index, simplemente lo dejamos en '/'
+                        window.history.replaceState(null, '', '/');
+                    }
+                } catch (err) {
+                    console.warn("Este dominio no está registrado en ninguna tienda del SaaS.");
+                }
+            }
+
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+        };
+
+        initApp();
     </script>
 </body>
 </html>
