@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    
     <!-- Configuraciones base del documento HTML5 para renderizado responsivo sin zoom forzado -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MENU DIGITALIZADO</title>
+    <title>Cargando Menú...</title>
     
     <!-- Preconexion y descarga de la tipografia principal para reducir tiempos de renderizado -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,7 +14,7 @@
     <!-- Inyeccion de Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Modificacion dinamica del objeto de configuracion de Tailwind para soportar variables CSS inyectadas por React -->
+    <!-- Modificacion dinamica de Tailwind para soportar variables CSS inyectadas -->
     <script>
         tailwind.config = {
             theme: {
@@ -30,33 +29,28 @@
         }
     </script>
     
-    <!-- Importacion de librerias de arquitectura: React DOM, React y el compilador en tiempo real Babel -->
+    <!-- Importacion de librerias de arquitectura: React, ReactDOM y Babel -->
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
     
-    <!-- SDK Oficial de Supabase para interaccion transaccional y WebSocket con Postgres -->
+    <!-- SDK Oficial de Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     
     <style>
-        /* Estructura del cuerpo principal usando variables dinamicas y configuraciones base */
         body { 
             font-family: 'Poppins', sans-serif; 
             -webkit-tap-highlight-color: transparent; 
             background-color: var(--color-bg); 
         }
-
-        /* Utilidades para esconder la barra de scroll vertical sin perder la funcion de desplazamiento */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-        /* Keyframes para orquestar la entrada suave de elementos en el DOM */
         @keyframes fade-in-down { 0% { opacity: 0; transform: translateY(-10px); } 100% { opacity: 1; transform: translateY(0); } }
         @keyframes slide-up { 0% { opacity: 0; transform: translateY(15px); } 100% { opacity: 1; transform: translateY(0); } }
         .animate-fade-in-down { animation: fade-in-down 0.3s ease-out forwards; }
         .animate-slide-up { animation: slide-up 0.3s ease-out forwards; }
 
-        /* Spinner nativo basado en bordes translucidos */
         .loader { 
             border: 4px solid rgba(255,255,255,0.1); 
             border-top: 4px solid var(--color-primary); 
@@ -67,7 +61,6 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
-        /* Efectos visuales de resplandor dinamico para elementos clave como el logotipo */
         @keyframes electric-glow {
             0% { box-shadow: 0 0 5px #fff, 0 0 10px #facc15, 0 0 20px #f97316; border-color: #ffffff; }
             50% { box-shadow: 0 0 20px #fff, 0 0 30px #facc15, 0 0 50px #ef4444; border-color: #fef08a; }
@@ -79,7 +72,6 @@
             animation: electric-glow 1.5s infinite alternate ease-in-out; 
         }
 
-        /* Animacion de degradado metalico para textos destacados */
         @keyframes shine-metal { 0% { background-position: 0% center; } 100% { background-position: 200% center; } }
         .text-metal-shine {
             background: linear-gradient(to right, #ca8a04 0%, #facc15 30%, #ffffff 50%, #facc15 70%, #ca8a04 100%);
@@ -95,26 +87,21 @@
     </style>
 </head>
 <body class="text-gray-800 min-h-screen text-lg selection:bg-brandPrimary selection:text-white">
-    <!-- Contenedor root requerido por ReactDOM para anidar la aplicacion -->
     <div id="root"></div>
 
     <script type="text/babel" data-type="module" data-presets="react">
-        // Importacion de modulos base de React
         const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
 
-        // Recuperacion y validacion del parametro URL para el identificador de arrendatario (Tenant ID)
-        const urlParams = new URLSearchParams(window.location.search);
-        const TIENDA_ID = parseInt(urlParams.get('tienda')) || 1;
+        // GLOBALES (Se asignan dinámicamente antes de arrancar React)
+        let TIENDA_ID = null;
+        let TIENDA_SLUG = null;
 
-        // Definicion de constantes estaticas de red e instanciacion del cliente Supabase
         const SUPABASE_URL = 'https://srhdgocsmswxidrwguhc.supabase.co'; 
         const SUPABASE_KEY = 'sb_publishable_pWKDoEBfP3l2ggqYh_l7IA_SNq1Esfz'; 
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        // CORRECCION: Funcion auxiliar disenada para normalizar cadenas de texto eliminando diacriticos que causan errores en WhatsApp
         const limpiarTexto = (t) => t ? String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "").trim() : "";
 
-        // Algoritmo de Haversine para determinar distancia geodesica en base a dos puntos GPS fijos
         const calculateDistance = (lat1, lon1, lat2, lon2) => { 
             const R = 6371; 
             const dLat = (lat2 - lat1) * Math.PI / 180; 
@@ -124,14 +111,12 @@
             return R * c; 
         };
         
-        // Factory memoizado para renderizacion estricta y veloz de graficos vectoriales (SVG)
         const Icon = memo(({ d, size = 28, className = "" }) => (
             <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
                 <path d={d} />
             </svg>
         ));
 
-        // Libreria local estatica de iconos asignados a componentes de interfaz
         const Icons = {
             Cart: (p) => <svg {...p} width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>, 
             Map: (p) => <svg {...p} width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>, 
@@ -148,11 +133,9 @@
             X: (p) => <svg {...p} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>,
             Eye: (p) => <svg {...p} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>,
             Download: (p) => <svg {...p} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>,
-            IosShare: (p) => <svg {...p} width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path><polyline points="16 6 12 2 8 6"></polyline><line x1="12" y1="2" x2="12" y2="15"></line></svg>,
             ShareNode: (p) => <svg {...p} width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
         };
 
-        // Envoltorio de botones reutilizables con estilos preconfigurados segun su nivel de impacto
         const Button = memo(({ onClick, children, variant = "primary", className = "", disabled = false, icon: IconComp, style }) => { 
             const variants = { 
                 primary: "bg-gradient-to-r from-brandPrimary to-brandSecondary text-white shadow-lg active:scale-95 hover:brightness-110 disabled:opacity-50 disabled:pointer-events-none", 
@@ -172,83 +155,49 @@
             ); 
         });
 
-        // 1. CORRECCION: Modulo React Portal para renderizar Video como un GIF silencioso (sin controles)
         const MediaModal = ({ media, onClose }) => {
             if (!media) return null;
-            
             const cleanUrl = String(media.url).trim();
-
             return ReactDOM.createPortal(
                 <div className="fixed inset-0 z-[99999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in-down" onClick={onClose}>
                     <div className="relative w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl bg-gray-900 border border-gray-700 flex items-center justify-center min-h-[250px]" onClick={e => e.stopPropagation()}>
-                        
-                        <button onClick={onClose} className="absolute top-4 right-4 z-50 bg-black/70 text-white p-2 rounded-full hover:bg-white hover:text-black transition-colors border border-white/20 shadow-lg">
-                            <Icons.X />
-                        </button>
-                        
+                        <button onClick={onClose} className="absolute top-4 right-4 z-50 bg-black/70 text-white p-2 rounded-full hover:bg-white hover:text-black transition-colors border border-white/20 shadow-lg"><Icons.X /></button>
                         {media.type === 'video' ? (
-                            <video 
-                                src={cleanUrl} 
-                                className="w-full h-auto max-h-[80vh] object-contain" 
-                                autoPlay={true}
-                                loop={true} 
-                                muted={true} 
-                                playsInline={true} // Obliga a iOS a no usar el reproductor nativo
-                                preload="metadata" // Optimiza la descarga inicial
-                                // Controles eliminados para funcionar como un GIF silencioso puro
-                            />
+                            <video src={cleanUrl} className="w-full h-auto max-h-[80vh] object-contain" autoPlay={true} loop={true} muted={true} playsInline={true} preload="metadata" />
                         ) : (
-                            <img 
-                                src={cleanUrl} 
-                                className="w-full h-auto max-h-[80vh] object-contain" 
-                                alt="Vista del producto" 
-                                loading="lazy"
-                            />
+                            <img src={cleanUrl} className="w-full h-auto max-h-[80vh] object-contain" alt="Vista del producto" loading="lazy" />
                         )}
-                        
                     </div>
                 </div>,
                 document.body
             );
         };
 
-        // Modulo logico y visual que representa un item individual del menu, controlando su estado de agregados, costos e ingredientes removibles
         const ProductItem = memo(({ item, category, onAdd, config, onShowMedia }) => {
             const [conTodo, setConTodo] = useState(true);
             const [exclusions, setExclusions] = useState({});
-            
-            // Estado para guardar multiples extras elegidos por el usuario
             const [selectedExtras, setSelectedExtras] = useState([]); 
             
             const isAvailable = item.disponible;
-            
-            // AHORA LOS REMOVIBLES SE LEEN DEL PRODUCTO
             const availableToppings = useMemo(() => item.removables || [], [item]);
 
-            // Convertidor Inteligente (Retrocompatibilidad)
             const parsedExtras = useMemo(() => {
                 if (Array.isArray(item.extras) && item.extras.length > 0) return item.extras;
                 if (item.has_extra && item.extra_name) return [{ nombre: item.extra_name, precio: item.extra_precio }];
                 return [];
             }, [item.extras, item.has_extra, item.extra_name, item.extra_precio]);
 
-            // Calculo dinamico de costo base + extras sumados
             const extrasTotal = selectedExtras.reduce((sum, ext) => sum + (parseFloat(ext.precio) || 0), 0);
             const currentPrice = parseFloat(item.precio) + extrasTotal;
             
-            // Re-hidratacion local si el prop de componente padre sufre cambios
             useEffect(() => { 
                 setConTodo(true); 
                 setExclusions({}); 
                 setSelectedExtras([]);
             }, [item.nombre]);
             
-            // Callbacks orquestadores para intercepcion de clics en las interfaces de ingredientes, evitando la mutacion directa
             const toggleConTodo = useCallback(() => { 
-                if (!conTodo) { 
-                    setConTodo(true); 
-                    setExclusions({}); 
-                } 
+                if (!conTodo) { setConTodo(true); setExclusions({}); } 
             }, [conTodo]);
             
             const toggleExclusion = useCallback((topping) => { 
@@ -261,7 +210,6 @@
                 }); 
             }, []);
 
-            // Interceptor para agregar o quitar de la lista de extras seleccionados
             const toggleExtra = useCallback((extra) => {
                 setSelectedExtras(prev => {
                     const isSelected = prev.find(e => e.nombre === extra.nombre);
@@ -270,7 +218,6 @@
                 });
             }, []);
             
-            // Procedimiento generador de payloads que construye una cadena pre-formateada de notas antes de pasarlo a la funcion superior onAdd
             const handleAdd = useCallback(() => { 
                 let details = ""; 
                 const activeExclusions = Object.entries(exclusions).filter(([_, isExcluded]) => isExcluded).map(([name]) => name); 
@@ -317,7 +264,6 @@
                             <p className="text-sm text-gray-500 mb-3 leading-snug break-words">{item.descripcion}</p>
                         )}
 
-                        {/* Boton dinamico que evalua primero si hay video y si no, busca imagen */}
                         {(item.video_url || item.image_url) && (
                             <button 
                                 onClick={() => onShowMedia({ url: item.video_url || item.image_url, type: item.video_url ? 'video' : 'image' })} 
@@ -327,16 +273,13 @@
                             </button>
                         )}
 
-                        {/* Modulo dinamico "Personalizar" (Oculto si el item no admite modificaciones o si esta deshabilitado) */}
                         {isAvailable && availableToppings.length > 0 && (
                             <div className="mb-4 flex flex-col gap-2 pt-2 border-t border-gray-100">
                                 <p className='text-sm text-gray-500 mb-1 font-semibold'>Personalizar:</p>
-                                
                                 <label className="flex items-center gap-3 text-base font-bold text-gray-900 cursor-pointer select-none p-2 rounded bg-gray-50 border border-gray-200 hover:bg-gray-100 transition-colors">
                                     <input type="checkbox" checked={conTodo} onChange={toggleConTodo} className="w-5 h-5 rounded" style={{accentColor: config.color_primario}} />
                                     Con Todo
                                 </label>
-                                
                                 <div className="grid grid-cols-2 gap-2 mt-1">
                                     {availableToppings.map(t => ( 
                                         <label key={t} className={`flex items-center gap-2 text-sm cursor-pointer select-none p-2 rounded border transition-colors ${exclusions[t] ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}>
@@ -348,7 +291,6 @@
                             </div>
                         )}
 
-                        {/* Renderizado de Matriz Multi-Extras */}
                         {parsedExtras.length > 0 && isAvailable && (
                             <div className="mb-4 flex flex-col gap-2 border-t border-gray-100 pt-3 mt-2">
                                 <p className='text-sm text-gray-500 mb-1 font-semibold'>Extras disponibles:</p>
@@ -371,7 +313,6 @@
                         )}
                     </div>
                     
-                    {/* Boton invocador final que propaga la respuesta en cascada hacia el objeto general App */}
                     <div className="p-4 pt-0 mt-auto">
                         <Button onClick={handleAdd} disabled={!isAvailable} className="w-full text-lg py-3 hover:brightness-110 active:scale-95" icon={Icons.Plus}>
                             {isAvailable ? 'Agregar' : 'No disponible'}
@@ -381,16 +322,14 @@
             );
         });
 
-        // Contenedor Logico Superior: Controla el flujo completo del cliente y la inicializacion con Base de Datos
+        // App Componente (El motor de la app, asume que TIENDA_ID ya existe)
         const App = () => {
             const [storeConfig, setStoreConfig] = useState(null);
             const [categoriesDB, setCategoriesDB] = useState([]);
             const [menuItemsDB, setMenuItemsDB] = useState([]);
             const [isLoading, setIsLoading] = useState(true);
-            const [errorLoad, setErrorLoad] = useState(false);
             const [activeMedia, setActiveMedia] = useState(null); 
 
-            // 2. CORRECCION: Referencia para el scroll del contenedor de categorias
             const categoriesRef = useRef(null);
             
             const handleShareMenu = async () => {
@@ -399,7 +338,7 @@
                         await navigator.share({
                             title: `MENU DIGITAL DE ${storeConfig.nombre}`,
                             text: `¡Mira el menú de ${storeConfig.nombre} y pidamos algo buenísimo! 🍔🔥`,
-                            url: window.location.href
+                            url: window.location.href // Ahora comparte limpiamente la URL con su slug
                         });
                     } catch (err) { console.log('Error compartiendo:', err); }
                 } else {
@@ -411,67 +350,22 @@
             useEffect(() => {
                 const fetchStoreData = async () => {
                     try {
+                        // Como el Interceptor ya validó el TIENDA_ID, hacemos las consultas de golpe
                         const { data: tienda, error: errTienda } = await supabase.from('tiendas').select('*').eq('id', TIENDA_ID).single();
                         if (errTienda || !tienda) throw new Error("Tienda no encontrada");
                         
                         setStoreConfig(tienda);
-                        
-                        // 1. Título de la pestaña
-                        document.title = `MENU DIGITAL DE ${tienda.nombre}`;
+                        document.title = `Menú | ${tienda.nombre}`;
 
-                        document.documentElement.style.setProperty('--color-primary', tienda.color_primario);
-                        document.documentElement.style.setProperty('--color-secondary', tienda.color_secundario);
-                        document.documentElement.style.setProperty('--color-bg', tienda.color_fondo);
+                        if(tienda.color_primario) document.documentElement.style.setProperty('--color-primary', tienda.color_primario);
+                        if(tienda.color_secundario) document.documentElement.style.setProperty('--color-secondary', tienda.color_secundario);
+                        if(tienda.color_fondo) document.documentElement.style.setProperty('--color-bg', tienda.color_fondo);
 
-                        // Limpiamos etiquetas previas generadas dinamicamente
                         document.querySelectorAll("link[rel='icon'], link[rel='apple-touch-icon'], meta[name='apple-mobile-web-app-title'], meta[name='application-name'], link[rel='manifest']").forEach(el => el.remove());
 
                         if (tienda.logo_url) {
-                            // Favicon estandar para navegador
-                            const favicon = document.createElement('link');
-                            favicon.rel = 'icon';
-                            favicon.href = tienda.logo_url;
-                            document.head.appendChild(favicon);
-
-                            // Favicon alta resolucion explícito (Android lo necesita a veces)
-                            const highResIcon = document.createElement('link');
-                            highResIcon.rel = 'icon';
-                            highResIcon.sizes = '192x192';
-                            highResIcon.href = tienda.logo_url;
-                            document.head.appendChild(highResIcon);
-
-                            // Favicon de dispositivos Apple
-                            const appleIcon = document.createElement('link');
-                            appleIcon.rel = 'apple-touch-icon';
-                            appleIcon.href = tienda.logo_url;
-                            document.head.appendChild(appleIcon);
-
-                            // Nombres dinámicos para acceso directo (iOS y Android viejos)
-                            const appleTitle = document.createElement('meta');
-                            appleTitle.name = 'apple-mobile-web-app-title';
-                            appleTitle.content = `MENU DIGITAL DE ${tienda.nombre}`;
-                            document.head.appendChild(appleTitle);
-
-                            const androidTitle = document.createElement('meta');
-                            androidTitle.name = 'application-name';
-                            androidTitle.content = `MENU DIGITAL DE ${tienda.nombre}`;
-                            document.head.appendChild(androidTitle);
-
-                            // 2. MANIFEST BÁSICO FALSO: Android moderno exige esto para poner el logo en el acceso directo, 
-                            // pero usar display "browser" evita que se comporte como PWA o instale Service Workers.
-                            const manifestData = {
-                                name: `MENU DIGITAL DE ${tienda.nombre}`,
-                                short_name: tienda.nombre,
-                                display: "browser", 
-                                icons: [
-                                    { src: tienda.logo_url, sizes: "192x192", type: "image/png" },
-                                    { src: tienda.logo_url, sizes: "512x512", type: "image/png" }
-                                ]
-                            };
-                            const manifestLink = document.createElement('link');
-                            manifestLink.rel = 'manifest';
-                            manifestLink.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifestData));
-                            document.head.appendChild(manifestLink);
+                            const favicon = document.createElement('link'); favicon.rel = 'icon'; favicon.href = tienda.logo_url; document.head.appendChild(favicon);
+                            const appleIcon = document.createElement('link'); appleIcon.rel = 'apple-touch-icon'; appleIcon.href = tienda.logo_url; document.head.appendChild(appleIcon);
                         }
 
                         const { data: cats } = await supabase.from('categorias').select('*').eq('tienda_id', TIENDA_ID).order('orden', { ascending: true });
@@ -483,7 +377,7 @@
 
                     } catch (err) {
                         console.error("Error cargando SaaS:", err);
-                        setErrorLoad(true);
+                        // El error fuerte ya lo cubre el interceptor, esto es por si falla algo interno
                     } finally {
                         setIsLoading(false);
                     }
@@ -549,7 +443,6 @@
 
             const requestLocation = () => {
                 if (!navigator.geolocation) return setLocation(prev => ({ ...prev, status: 'error' }));
-                
                 if(!confirm(`📍 Necesitamos verificar tu zona de entrega.\n\nACEPTAR para continuar.`)) return;
                 
                 setLocation(prev => ({ ...prev, status: 'loading' }));
@@ -588,15 +481,11 @@
                 const shipping = orderType === 'pickup' ? 0 : (location.allowed ? location.shippingCost : 0);
                 let baseTotal = subtotal + shipping + tip; 
                 const cardFee = customer.paymentMethod === 'tarjeta' ? baseTotal * parseFloat(storeConfig?.porcentaje_tarjeta || 0) : 0; 
-                
                 return { subtotal, tip, cardFee, shipping, finalTotal: baseTotal + cardFee }; 
             }, [cart, customer.tip, customer.paymentMethod, orderType, location.allowed, location.shippingCost, storeConfig]);
 
             const closeWaitModal = () => { 
-                setShowWaitModal(false); 
-                setIsSubmitting(false); 
-                setSubmitText("Confirmar Orden"); 
-                setWhatsappFallbackUrl(null); 
+                setShowWaitModal(false); setIsSubmitting(false); setSubmitText("Confirmar Orden"); setWhatsappFallbackUrl(null); 
             };
 
             const handleCheckout = async () => {
@@ -613,7 +502,7 @@
                 
                 if (customer.paymentMethod === 'efectivo') {
                     const payAmount = parseFloat(customer.paymentAmount) || 0;
-                    if (payAmount < totals.finalTotal) return showNotification(`⚠️ El pago কাশী debe cubrir el total de $${totals.finalTotal.toFixed(2)}`);
+                    if (payAmount < totals.finalTotal) return showNotification(`⚠️ El pago debe cubrir el total de $${totals.finalTotal.toFixed(2)}`);
                 }
 
                 if (storeConfig.upsell_config?.enabled) {
@@ -652,9 +541,7 @@
 
                 msg += `--------------------------------\n`;
                 cart.forEach(item => { msg += `✅ *${item.qty}* x *${limpiarTexto(item.nombre)}* ${item.isExtra ? '('+limpiarTexto(item.extraAppliedName)+')' : ''} ${item.details || ''}- $${(item.price * item.qty).toFixed(2)}\n`; });
-                
                 if (customer.instructions) msg += `\n📝 *Notas:* ${limpiarTexto(customer.instructions)}`;
-                
                 msg += `\n--------------------\n\nSubtotal: $${totals.subtotal.toFixed(2)}\n\n`;
                 
                 if (orderType === 'delivery') msg += `🛵 Envío: $${shippingSeguro.toFixed(2)} ${location.zoneName ? '('+location.zoneName+')' : ''}\n`;
@@ -672,12 +559,8 @@
 
                 msg += `*💰 TOTAL: $${finalTotalSeguro.toFixed(2)}*\n\n*Pago:* ${pagoInfo}`;
                 
-                if (orderType === 'delivery') {
-                    if (location.lat && location.lng) {
-                        msg += `\n\n📍 *DIRECCIÓN DE ENTREGA:*\n https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`;
-                    } else {
-                        msg += `\n\n⚠️ Ubicación: PENDIENTE (enviar manualmente)`;
-                    }
+                if (orderType === 'delivery' && location.lat && location.lng) {
+                    msg += `\n\n📍 *DIRECCIÓN DE ENTREGA:*\n https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`;
                 }
 
                 const whatsappUrl = `https://wa.me/${storeConfig.telefono_whatsapp}?text=${encodeURIComponent(msg)}`;
@@ -688,36 +571,20 @@
 
                 try {
                     const insertPromise = supabase.from('pedidos').insert([{ 
-                        tienda_id: TIENDA_ID, 
-                        cliente_nombre: customer.name, 
-                        cliente_telefono: customer.phone,
-                        tipo_entrega: orderType,
-                        metodo_pago: customer.paymentMethod,
-                        pago_con: customer.paymentMethod === 'efectivo' ? parseFloat(customer.paymentAmount) : null,
-                        latitud: location.lat,
-                        longitud: location.lng,
-                        total_subtotal: totals.subtotal,
-                        total_envio: shippingSeguro,
-                        total_comision: cardFeeSeguro,
-                        total_propina: tipSeguro,
-                        total_final: finalTotalSeguro,
-                        detalle_json: cart,
-                        respuestas_checkout: customer.customAnswers,
-                        nota_cliente: customer.instructions,
-                        estado: 'pendiente'
+                        tienda_id: TIENDA_ID, cliente_nombre: customer.name, cliente_telefono: customer.phone, tipo_entrega: orderType,
+                        metodo_pago: customer.paymentMethod, pago_con: customer.paymentMethod === 'efectivo' ? parseFloat(customer.paymentAmount) : null,
+                        latitud: location.lat, longitud: location.lng, total_subtotal: totals.subtotal, total_envio: shippingSeguro,
+                        total_comision: cardFeeSeguro, total_propina: tipSeguro, total_final: finalTotalSeguro, detalle_json: cart,
+                        respuestas_checkout: customer.customAnswers, nota_cliente: customer.instructions, estado: 'pendiente'
                     }]);
-                    
                     const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 4000));
                     await Promise.race([insertPromise, timeoutPromise]);
                 } catch(err) {
                     console.warn("⚠️ Falló guardado DB, enviando a WP de todos modos.", err);
                 }
 
-                setCart([]); 
-                localStorage.removeItem(`saasCart_${TIENDA_ID}`); 
-                setShowCart(false);
-                setWhatsappFallbackUrl(whatsappUrl); 
-                setSubmitText("Redirigiendo..."); 
+                setCart([]); localStorage.removeItem(`saasCart_${TIENDA_ID}`); setShowCart(false);
+                setWhatsappFallbackUrl(whatsappUrl); setSubmitText("Redirigiendo..."); 
 
                 if (!isMobile && preOpenedWindow) preOpenedWindow.location.href = whatsappUrl;
                 else window.location.href = whatsappUrl;
@@ -725,7 +592,6 @@
 
             const processedMenu = useMemo(() => {
                 let activeCats = categoriesDB;
-                
                 if (!searchTerm && activeCategory) activeCats = categoriesDB.filter(c => c.nombre === activeCategory);
                 
                 return activeCats.map(cat => {
@@ -735,7 +601,6 @@
                 }).filter(cat => cat.items.length > 0 || searchTerm); 
             }, [categoriesDB, menuItemsDB, searchTerm, activeCategory]);
 
-            // 2. CORRECCION: Funcion de clic en categoria sin scroll automatico hacia arriba
             const handleCategoryClick = (catName) => {
                 setActiveCategory(catName);
                 if (categoriesRef.current) {
@@ -744,12 +609,8 @@
                 }
             };
 
-            // ELIMINADO: el useEffect que forzaba window.scrollTo({ top: 0 }) cuando cambiaba activeCategory
-
             if (isLoading) return <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center"><div className="loader mb-4"></div><p className="text-gray-400">Cargando restaurante...</p></div>;
             
-            if (errorLoad) return <div className="min-h-screen bg-gray-900 flex items-center justify-center p-6 text-center"><div className="bg-red-900/50 border border-red-500 p-6 rounded-2xl"><h2 className="text-2xl text-white font-bold mb-2">Error de conexión</h2><p className="text-gray-300">No pudimos cargar la información de la tienda. Verifica el ID.</p></div></div>;
-
             if (!storeConfig.abierto) {
                   return (
                     <div className="min-h-screen bg-gray-900 flex flex-col items-center justify-center p-6 text-center animate-fade-in-down">
@@ -768,72 +629,42 @@
 
             return (
                 <div className="relative min-h-screen pb-24 text-base transition-colors duration-700" style={{ backgroundColor: storeConfig.color_fondo }}>
-                    
-                    <div className="fixed inset-0 z-0 pointer-events-none transition-colors duration-700" style={{
-                        background: orderType === 'pickup' 
-                            ? `linear-gradient(to bottom right, ${pickupColor}, #1e1b4b)` 
-                            : `linear-gradient(to bottom right, #facc15, ${deliveryColor}, #991b1b)`
-                    }}>
+                    <div className="fixed inset-0 z-0 pointer-events-none transition-colors duration-700" style={{ background: orderType === 'pickup' ? `linear-gradient(to bottom right, ${pickupColor}, #1e1b4b)` : `linear-gradient(to bottom right, #facc15, ${deliveryColor}, #991b1b)` }}>
                         <div className="absolute inset-0 bg-cover bg-center opacity-20 mix-blend-overlay transition-opacity duration-700" style={{ backgroundImage: `url(${storeConfig.logo_url})` }} />
                     </div>
 
                     <header className="bg-black/90 backdrop-blur-md shadow-2xl border-b-4 rounded-b-3xl mx-auto max-w-2xl px-4 py-8 text-center z-50 relative transition-colors duration-700 flex flex-col items-center" style={{ borderColor: orderType === 'pickup' ? pickupColor : deliveryColor }}>
-                        
                         <img src={storeConfig.logo_url} className="h-40 w-40 sm:h-48 sm:w-48 rounded-full logo-electric mb-4 relative z-10 object-cover" loading="eager" />
                         <h1 className="text-3xl font-black text-metal-shine tracking-widest drop-shadow-sm mb-4">{storeConfig.nombre}</h1>
                         
-                        {/* Botón Compartir Redes */}
-                        <button 
-                            onClick={handleShareMenu}
-                            className="inline-flex items-center justify-center gap-2 bg-blue-600/20 hover:bg-blue-500/40 text-blue-100 px-6 py-3 rounded-xl font-bold border border-blue-400/30 transition-colors shadow-sm mb-6 w-full max-w-xs"
-                        >
+                        <button onClick={handleShareMenu} className="inline-flex items-center justify-center gap-2 bg-blue-600/20 hover:bg-blue-500/40 text-blue-100 px-6 py-3 rounded-xl font-bold border border-blue-400/30 transition-colors shadow-sm mb-6 w-full max-w-xs">
                             <Icons.ShareNode /> Compartir menú con amigos
                         </button>
 
                         <div className="bg-gray-900 p-1.5 rounded-full flex gap-1 border border-gray-700 shadow-inner w-full max-w-sm mb-5">
-                            <button 
-                                onClick={() => setOrderType('delivery')}
-                                className={`flex-1 py-2.5 rounded-full font-bold text-sm sm:text-base transition-all duration-300 ${orderType === 'delivery' ? 'text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                                style={{ backgroundColor: orderType === 'delivery' ? deliveryColor : 'transparent' }}
-                            >
-                                🛵 Domicilio
-                            </button>
-                            <button 
-                                onClick={() => setOrderType('pickup')}
-                                className={`flex-1 py-2.5 rounded-full font-bold text-sm sm:text-base transition-all duration-300 ${orderType === 'pickup' ? 'text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                                style={{ backgroundColor: orderType === 'pickup' ? pickupColor : 'transparent' }}
-                            >
-                                🛍️ Pickup
-                            </button>
+                            <button onClick={() => setOrderType('delivery')} className={`flex-1 py-2.5 rounded-full font-bold text-sm sm:text-base transition-all duration-300 ${orderType === 'delivery' ? 'text-white shadow-lg' : 'text-gray-400 hover:text-white'}`} style={{ backgroundColor: orderType === 'delivery' ? deliveryColor : 'transparent' }}>🛵 Domicilio</button>
+                            <button onClick={() => setOrderType('pickup')} className={`flex-1 py-2.5 rounded-full font-bold text-sm sm:text-base transition-all duration-300 ${orderType === 'pickup' ? 'text-white shadow-lg' : 'text-gray-400 hover:text-white'}`} style={{ backgroundColor: orderType === 'pickup' ? pickupColor : 'transparent' }}>🛍️ Pickup</button>
                         </div>
 
-                        <a 
-                            href={`https://www.google.com/maps/search/?api=1&query=${storeConfig.latitud},${storeConfig.longitud}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-xl font-bold border border-white/20 transition-colors shadow-sm mb-5 w-full max-w-xs"
-                        >
-                            <Icons.Map size={22} />
-                            Ver nuestra ubicación
-                        </a>
+                        {storeConfig.latitud && storeConfig.longitud && (
+                            <a href={`https://www.google.com/maps/search/?api=1&query=${storeConfig.latitud},${storeConfig.longitud}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-xl font-bold border border-white/20 transition-colors shadow-sm mb-5 w-full max-w-xs">
+                                <Icons.Map size={22} /> Ver nuestra ubicación
+                            </a>
+                        )}
 
                         {orderType === 'delivery' && (
                             <div className="bg-orange-500/20 border border-orange-500/50 text-orange-200 px-5 py-3 rounded-xl inline-flex items-center gap-2 text-sm sm:text-base font-bold shadow-sm">
-                                <Icons.Clock size={20} className="text-orange-400"/> 
-                                Tiempo de entrega: 45 a 60 min
+                                <Icons.Clock size={20} className="text-orange-400"/> Tiempo de entrega: 45 a 60 min
                             </div>
                         )}
                         {orderType === 'pickup' && (
                             <div className="bg-fuchsia-500/20 border border-fuchsia-500/50 text-fuchsia-200 px-5 py-3 rounded-xl inline-flex items-center gap-2 text-sm sm:text-base font-bold shadow-sm">
-                                <Icons.Clock size={20} className="text-fuchsia-400"/> 
-                                Pasa a recoger en mostrador
+                                <Icons.Clock size={20} className="text-fuchsia-400"/> Pasa a recoger en mostrador
                             </div>
                         )}
                     </header>
 
                     <main className="max-w-4xl mx-auto p-4 relative z-10 mt-4">
-                        
-                        {/* 2. CORRECCION: Referencia asignada al contenedor sticky */}
                         <div ref={categoriesRef} className="sticky top-0 z-40 -mx-4 pt-4 bg-gradient-to-b from-black/60 to-transparent backdrop-blur-sm mb-4 pb-2">
                             <div className="px-4 pb-4 max-w-lg mx-auto">
                                 <div className="relative group">
@@ -846,11 +677,7 @@
                             {!searchTerm && ( 
                                 <div className="flex flex-wrap justify-center gap-2 pb-4 px-4">
                                     {categoriesDB.map(cat => ( 
-                                        <button 
-                                            key={cat.id} 
-                                            onClick={() => handleCategoryClick(cat.nombre)} 
-                                            className={`whitespace-nowrap px-4 py-2 rounded-full font-bold text-base transition-all transform active:scale-95 shadow-md ${activeCategory === cat.nombre ? 'bg-orange-600 text-white scale-105 border-2 border-orange-300' : 'bg-black/60 text-white border border-white/20 hover:bg-orange-500'}`}
-                                        >
+                                        <button key={cat.id} onClick={() => handleCategoryClick(cat.nombre)} className={`whitespace-nowrap px-4 py-2 rounded-full font-bold text-base transition-all transform active:scale-95 shadow-md ${activeCategory === cat.nombre ? 'bg-orange-600 text-white scale-105 border-2 border-orange-300' : 'bg-black/60 text-white border border-white/20 hover:bg-orange-500'}`}>
                                             {cat.nombre}
                                         </button> 
                                     ))}
@@ -878,7 +705,7 @@
                                 <div className="mt-10 bg-white rounded-3xl shadow-2xl overflow-hidden border-t-4" style={{ borderColor: orderType === 'pickup' ? pickupColor : deliveryColor }}>
                                     <div className="bg-gray-900 p-6 flex items-center gap-3 text-white">
                                         <Icons.Cart size={32} style={{ color: orderType === 'pickup' ? pickupColor : deliveryColor }} />
-                                        <h2 className="font-bold text-2xl">Tu Pedido ({orderType === 'pickup' ? 'PICKUP' : 'DOMICILIO'})</h2>
+                                        <h2 className="font-bold text-2xl">Tu Pedido</h2>
                                     </div>
                                     
                                     <div className="p-6 max-h-[500px] overflow-y-auto custom-scrollbar space-y-4">
@@ -901,7 +728,6 @@
                                     </div>
 
                                     <div className="bg-gray-50 p-6 border-t space-y-6">
-                                        
                                         <h3 className="font-bold text-gray-600 text-base uppercase flex items-center gap-2"><Icons.Map size={24} /> Datos de Entrega</h3>
                                         <input type="text" placeholder="Nombre Completo" value={customer.name} onChange={e=>setCustomer({...customer, name:e.target.value})} className="w-full p-4 bg-white border rounded-xl text-lg shadow-sm" />
                                         <input type="tel" placeholder="Número de Teléfono" value={customer.phone} onChange={e=>setCustomer({...customer, phone:e.target.value})} className="w-full p-4 bg-white border rounded-xl text-lg shadow-sm" />
@@ -911,14 +737,7 @@
                                                 <p className="text-sm font-bold text-gray-500 uppercase ml-1">{field.label}</p>
                                                 <div className="grid grid-cols-2 gap-3">
                                                     {field.options.map(opt => (
-                                                        <button 
-                                                            key={opt} 
-                                                            type="button" 
-                                                            onClick={() => handleCustomAnswer(field.id, opt)} 
-                                                            className={`py-3 px-2 rounded-xl text-sm font-bold border-2 transition-all active:scale-95 flex items-center justify-center gap-2 ${customer.customAnswers[field.id] === opt ? 'bg-orange-100 border-orange-500 text-orange-700 shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                                                        >
-                                                            {opt}
-                                                        </button>
+                                                        <button key={opt} type="button" onClick={() => handleCustomAnswer(field.id, opt)} className={`py-3 px-2 rounded-xl text-sm font-bold border-2 transition-all active:scale-95 flex items-center justify-center gap-2 ${customer.customAnswers[field.id] === opt ? 'bg-orange-100 border-orange-500 text-orange-700 shadow-sm' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>{opt}</button>
                                                     ))}
                                                 </div>
                                             </div>
@@ -928,12 +747,7 @@
                                         
                                         {orderType === 'delivery' && (
                                             <div className="space-y-2">
-                                                <Button 
-                                                    onClick={requestLocation} 
-                                                    variant={location.status === 'success' ? (location.allowed ? 'primary' : 'danger') : 'secondary'} 
-                                                    className={`w-full text-base py-4 ${location.status === 'success' && location.allowed ? 'bg-green-600' : ''}`} 
-                                                    icon={Icons.Map}
-                                                >
+                                                <Button onClick={requestLocation} variant={location.status === 'success' ? (location.allowed ? 'primary' : 'danger') : 'secondary'} className={`w-full text-base py-4 ${location.status === 'success' && location.allowed ? 'bg-green-600' : ''}`} icon={Icons.Map}>
                                                     {location.status === 'loading' ? '📍 Buscando...' : location.status === 'success' ? (location.allowed ? `✅ ${location.zoneName} ($${location.shippingCost})` : `🚫 Fuera de Rango`) : '📍 Calcular Tarifa de Envío'}
                                                 </Button>
                                             </div>
@@ -941,11 +755,7 @@
 
                                         <div className="grid grid-cols-3 gap-4">
                                             {['efectivo', 'transferencia', 'tarjeta'].map(m => ( 
-                                                <button 
-                                                    key={m} 
-                                                    onClick={() => setCustomer({...customer, paymentMethod: m})} 
-                                                    className={`py-4 rounded-xl text-sm font-bold uppercase border flex flex-col items-center gap-2 ${customer.paymentMethod === m ? 'bg-gray-800 text-white' : 'bg-white text-gray-600'}`}
-                                                >
+                                                <button key={m} onClick={() => setCustomer({...customer, paymentMethod: m})} className={`py-4 rounded-xl text-sm font-bold uppercase border flex flex-col items-center gap-2 ${customer.paymentMethod === m ? 'bg-gray-800 text-white' : 'bg-white text-gray-600'}`}>
                                                     {m === 'efectivo' && <Icons.Cash size={28} />} 
                                                     {m === 'transferencia' && <Icons.Phone size={28} />} 
                                                     {m === 'tarjeta' && <Icons.Card size={28} />} 
@@ -979,21 +789,12 @@
                                         <div className="bg-orange-100/50 p-6 rounded-xl space-y-3 border border-orange-200">
                                             <div className="flex justify-between"><span>Subtotal</span><span>${totals.subtotal.toFixed(2)}</span></div>
                                             <div className="flex justify-between"><span>Envío ({orderType === 'pickup' ? 'Pickup' : (location.allowed ? location.zoneName : 'Por validar')})</span><span>${totals.shipping.toFixed(2)}</span></div>
-                                            <div className="flex justify-between items-center">
-                                                <span>Propina</span>
-                                                <input type="number" placeholder="0" value={customer.tip} onChange={e => setCustomer({...customer, tip: e.target.value})} className="w-24 p-1 border rounded text-right" />
-                                            </div>
+                                            <div className="flex justify-between items-center"><span>Propina</span><input type="number" placeholder="0" value={customer.tip} onChange={e => setCustomer({...customer, tip: e.target.value})} className="w-24 p-1 border rounded text-right" /></div>
                                             {totals.cardFee > 0 && <div className="flex justify-between font-bold text-purple-700"><span>Comisión</span><span>${totals.cardFee.toFixed(2)}</span></div>}
                                             <div className="flex justify-between font-black text-3xl pt-2 border-t border-orange-200"><span>TOTAL</span><span>${totals.finalTotal.toFixed(2)}</span></div>
                                         </div>
                                         
-                                        <Button 
-                                            onClick={handleCheckout} 
-                                            disabled={!storeConfig.abierto} 
-                                            className={`w-full py-5 text-xl shadow-xl ${storeConfig.abierto ? 'text-white' : 'bg-gray-400 opacity-60 cursor-not-allowed text-white'}`} 
-                                            icon={storeConfig.abierto ? Icons.Send : Icons.Clock}
-                                            style={storeConfig.abierto ? { background: orderType === 'pickup' ? pickupColor : deliveryColor } : {}}
-                                        >
+                                        <Button onClick={handleCheckout} disabled={!storeConfig.abierto} className={`w-full py-5 text-xl shadow-xl ${storeConfig.abierto ? 'text-white' : 'bg-gray-400 opacity-60 cursor-not-allowed text-white'}`} icon={storeConfig.abierto ? Icons.Send : Icons.Clock} style={storeConfig.abierto ? { background: orderType === 'pickup' ? pickupColor : deliveryColor } : {}}>
                                             {storeConfig.abierto ? 'ENVIAR PEDIDO' : 'TIENDA CERRADA'}
                                         </Button>
                                     </div>
@@ -1006,9 +807,7 @@
                         <div className="fixed bottom-6 w-full px-4 sm:px-6 left-1/2 transform -translate-x-1/2 z-50 max-w-4xl mx-auto flex justify-end pointer-events-none">
                             <button onClick={() => { setShowCart(!showCart); if(!showCart) setTimeout(() => document.getElementById('cart')?.scrollIntoView({ behavior: 'smooth' }), 100); else { if(categoriesRef.current){ window.scrollTo({top: categoriesRef.current.offsetTop - 20, behavior: 'smooth'}) } else {window.scrollTo({ top: 0, behavior: 'smooth' });} } }} className="pointer-events-auto bg-gray-900/90 backdrop-blur-xl text-white pl-5 pr-6 py-4 rounded-full shadow-[0_20px_40px_rgba(0,0,0,0.5)] hover:scale-105 active:scale-95 flex items-center gap-4 border border-white/10 transition-all duration-300 group">
                                 <div className="relative flex items-center">
-                                    <div className="p-2.5 rounded-full text-white group-hover:rotate-12 transition-transform shadow-[0_0_15px_rgba(var(--color-primary),0.6)]" style={{ backgroundColor: orderType === 'pickup' ? pickupColor : deliveryColor }}>
-                                        <Icons.Cart size={24} />
-                                    </div>
+                                    <div className="p-2.5 rounded-full text-white group-hover:rotate-12 transition-transform shadow-[0_0_15px_rgba(var(--color-primary),0.6)]" style={{ backgroundColor: orderType === 'pickup' ? pickupColor : deliveryColor }}><Icons.Cart size={24} /></div>
                                     <span className={`absolute -top-3 -right-3 font-black w-6 h-6 rounded-full flex items-center justify-center border-2 border-white shadow-lg transition-all duration-300 ${cartAnimate ? 'bg-yellow-400 text-black scale-125 rotate-12' : 'bg-red-600 text-white scale-100 rotate-0 text-xs'}`}>{cart.reduce((a,c) => a + c.qty, 0)}</span>
                                 </div>
                                 <div className="border-l-2 pl-3 flex flex-col items-start leading-none" style={{ borderColor: orderType === 'pickup' ? pickupColor : deliveryColor }}>
@@ -1021,8 +820,7 @@
                     
                     {notification && ( 
                         <div className="fixed top-1/2 left-[5%] transform -translate-x-1/2 -translate-y-1/2 bg-gray-900/95 backdrop-blur-md text-white px-8 py-6 rounded-2xl shadow-2xl z-[9999] flex flex-col items-center justify-center gap-4 text-xl font-bold animate-fade-in-down border border-gray-700 text-center min-w-[300px] max-w-[90%]">
-                            <div className="bg-green-500 rounded-full p-2 animate-bounce"><Icons.Check size={32} className="text-white" /></div>
-                            {notification}
+                            <div className="bg-green-500 rounded-full p-2 animate-bounce"><Icons.Check size={32} className="text-white" /></div>{notification}
                         </div> 
                     )}
 
@@ -1073,9 +871,7 @@
                                         </p>
                                         <div className="flex flex-col sm:flex-row gap-4">
                                             <button disabled={isSubmitting} onClick={closeWaitModal} className={`flex-1 py-4 rounded-xl border-2 font-bold transition-all ${isSubmitting ? 'border-gray-200 text-gray-300 cursor-not-allowed' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700 hover:border-gray-300'}`}>Cancelar</button>
-                                            <button disabled={isSubmitting} onClick={confirmAndSend} className={`flex-1 py-4 rounded-xl text-white font-bold shadow-xl transition-all flex justify-center items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'hover:scale-105 active:scale-95'}`} style={{ backgroundColor: isSubmitting ? undefined : (orderType === 'pickup' ? pickupColor : deliveryColor) }}>
-                                                {submitText}
-                                            </button>
+                                            <button disabled={isSubmitting} onClick={confirmAndSend} className={`flex-1 py-4 rounded-xl text-white font-bold shadow-xl transition-all flex justify-center items-center gap-2 ${isSubmitting ? 'bg-gray-400 cursor-not-allowed shadow-none' : 'hover:scale-105 active:scale-95'}`} style={{ backgroundColor: isSubmitting ? undefined : (orderType === 'pickup' ? pickupColor : deliveryColor) }}>{submitText}</button>
                                         </div>
                                     </>
                                 )}
@@ -1087,9 +883,74 @@
                 </div>
             );
         };
-        
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+
+        // ==========================================
+        // ARRANQUE Y CANDADO MAESTRO
+        // ==========================================
+        const initApp = async () => {
+            const parametroTienda = new URLSearchParams(window.location.search).get('tienda');
+
+            // 1. FILTRO DE SEGURIDAD
+            if (!parametroTienda || parametroTienda.trim() === '') {
+                document.body.innerHTML = `
+                    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">🚫</div>
+                        <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Acceso Denegado</h2>
+                        <p style="color: #d1d5db;">No se especificó ninguna tienda en el enlace.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                let query = supabase.from('tiendas').select('id, slug');
+
+                // 2. LLAVE CAMALEÓNICA (Número vs Slug)
+                if (/^\d+$/.test(parametroTienda)) {
+                    query = query.eq('id', parseInt(parametroTienda));
+                } else {
+                    query = query.eq('slug', parametroTienda);
+                }
+
+                const { data, error } = await query.single();
+
+                if (error || !data) {
+                    document.body.innerHTML = `
+                        <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🚫</div>
+                            <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Tienda no encontrada</h2>
+                            <p style="color: #d1d5db;">El enlace es incorrecto o la tienda no existe.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // 3. ASIGNACIÓN GLOBAL
+                TIENDA_ID = data.id;
+                TIENDA_SLUG = data.slug || data.id;
+
+                // 4. MAGIA: REEMPLAZO SILENCIOSO DE ID POR SLUG
+                if (data.slug && parametroTienda !== data.slug) {
+                    window.history.replaceState(null, '', `${window.location.pathname}?tienda=${data.slug}`);
+                }
+
+                // 5. ARRANCAR APLICACIÓN
+                const root = ReactDOM.createRoot(document.getElementById('root'));
+                root.render(<App />);
+
+            } catch (err) {
+                console.error("Error inicializando app:", err);
+                document.body.innerHTML = `
+                    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">⚠️</div>
+                        <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Error de conexión</h2>
+                        <p style="color: #d1d5db;">No pudimos conectar con el servidor.</p>
+                    </div>
+                `;
+            }
+        };
+
+        initApp();
     </script>
 </body>
 </html>

@@ -15,8 +15,8 @@
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700;900&display=swap');
         
         :root {
-            --color-primary: #f97316; /* Naranja por defecto */
-            --color-bg: #111827; /* Fondo oscuro por defecto */
+            --color-primary: #f97316;
+            --color-bg: #111827;
         }
 
         body { 
@@ -26,7 +26,6 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* El brillo ahora usa el color dinámico de la base de datos */
         .logo-glow { 
             box-shadow: 0 0 25px var(--color-primary); 
             border-color: var(--color-primary); 
@@ -34,9 +33,7 @@
             border-style: solid; 
         }
 
-        .bg-glow-effect {
-            background-color: var(--color-primary);
-        }
+        .bg-glow-effect { background-color: var(--color-primary); }
 
         .loader { 
             border: 4px solid rgba(255,255,255,0.1); 
@@ -59,10 +56,10 @@
     <script type="text/babel" data-type="module" data-presets="react">
         const { useState, useEffect } = React;
 
-        // 🚀 LECTURA DINÁMICA DE LA TIENDA POR URL (Permitimos sobreescritura con let)
-        let TIENDA_ID = parseInt(new URLSearchParams(window.location.search).get('tienda')) || 1;
+        // 1. CAPTURA DEL PARÁMETRO
+        const parametroTienda = new URLSearchParams(window.location.search).get('tienda');
 
-        // Credenciales de Supabase
+        // 2. CONEXIÓN A BASE DE DATOS
         const SUPABASE_URL = 'https://srhdgocsmswxidrwguhc.supabase.co'; 
         const SUPABASE_KEY = 'sb_publishable_pWKDoEBfP3l2ggqYh_l7IA_SNq1Esfz'; 
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -70,36 +67,50 @@
         const App = () => {
             const [tienda, setTienda] = useState(null);
             const [loading, setLoading] = useState(true);
-
-            // ==========================================
-            // LOGICA INTELIGENTE DE RUTEO DE BOTONES
-            // ==========================================
-            const hostname = window.location.hostname.replace('www.', '');
-            // NOTA: Asegúrate de poner aquí tu dominio genérico real de Netlify si difiere
-            const saasDomains = ['menus-delivery.netlify.app', 'localhost', '127.0.0.1'];
-            const isCustomDomain = !saasDomains.includes(hostname);
-
-            // Armado dinámico de las URLs de destino
-            const linkMenu = isCustomDomain ? '/menus.html' : `/menus.html?tienda=${TIENDA_ID}`;
-            const linkImagenes = isCustomDomain ? '/menu-imagenes.html' : `/menu-imagenes.html?tienda=${TIENDA_ID}`;
+            const [errorMsg, setErrorMsg] = useState(null);
 
             useEffect(() => {
+                // FILTRO DE SEGURIDAD 1: Sin parámetro no hay acceso
+                if (!parametroTienda || parametroTienda.trim() === '') {
+                    setErrorMsg("No se especificó ninguna tienda en el enlace. Por favor verifica la URL.");
+                    setLoading(false);
+                    return;
+                }
+
                 const fetchTienda = async () => {
                     try {
-                        const { data, error } = await supabase.from('tiendas').select('*').eq('id', TIENDA_ID).single();
+                        let query = supabase.from('tiendas').select('*');
                         
-                        if (error) throw error;
-                        
-                        if (data) {
-                            setTienda(data);
-                            document.title = `${data.nombre} | Bienvenidos`;
-                            
-                            // Inyectar los colores corporativos de la tienda al CSS
-                            if (data.color_primario) document.documentElement.style.setProperty('--color-primary', data.color_primario);
-                            if (data.color_fondo) document.documentElement.style.setProperty('--color-bg', data.color_fondo);
+                        // FILTRO DE SEGURIDAD 2: Detectamos si entró con ID (números) o Slug (letras)
+                        if (/^\d+$/.test(parametroTienda)) {
+                            query = query.eq('id', parseInt(parametroTienda));
+                        } else {
+                            query = query.eq('slug', parametroTienda);
                         }
+
+                        const { data, error } = await query.single();
+                        
+                        if (error || !data) {
+                            setErrorMsg("La tienda solicitada no existe o el enlace es incorrecto.");
+                            setLoading(false);
+                            return;
+                        }
+                        
+                        // 3. APLICACIÓN DE DATOS
+                        setTienda(data);
+                        document.title = `${data.nombre} | Bienvenidos`;
+                        
+                        if (data.color_primario) document.documentElement.style.setProperty('--color-primary', data.color_primario);
+                        if (data.color_fondo) document.documentElement.style.setProperty('--color-bg', data.color_fondo);
+                        
+                        // 4. MAGIA: REEMPLAZO SILENCIOSO DE ID POR SLUG
+                        if (data.slug && parametroTienda !== data.slug) {
+                            window.history.replaceState(null, '', `${window.location.pathname}?tienda=${data.slug}`);
+                        }
+
                     } catch (err) {
-                        console.error("Error cargando la tienda:", err);
+                        console.error("Error del servidor:", err);
+                        setErrorMsg("Error de conexión al sistema.");
                     } finally {
                         setLoading(false);
                     }
@@ -108,30 +119,34 @@
                 fetchTienda();
             }, []);
 
+            // RENDER: ESTADO DE CARGA
             if (loading) return <div className="loader"></div>;
 
-            if (!tienda) {
+            // RENDER: ESTADO DE ERROR / ACCESO DENEGADO
+            if (errorMsg || !tienda) {
                 return (
-                    <div className="bg-red-900/40 border border-red-500 p-6 rounded-2xl max-w-sm animate-fade-in">
-                        <h2 className="text-xl font-bold mb-2 text-white">Tienda no encontrada</h2>
-                        <p className="text-gray-300 text-sm">El enlace ingresado no corresponde a ningún negocio activo en la plataforma.</p>
+                    <div className="bg-red-900/40 border border-red-500 p-6 rounded-2xl max-w-sm animate-fade-in w-full shadow-2xl">
+                        <div className="text-5xl mb-4">🚫</div>
+                        <h2 className="text-2xl font-black mb-2 text-white uppercase tracking-wider">Acceso Denegado</h2>
+                        <p className="text-gray-300 text-sm font-medium">{errorMsg}</p>
                     </div>
                 );
             }
 
+            // ENLACES LIMPIOS: Usar siempre el slug por defecto para mantener profesionalismo
+            const identificador = tienda.slug || tienda.id;
+
+            // RENDER: PANTALLA PRINCIPAL DE LA TIENDA
             return (
                 <div className="w-full max-w-sm mx-auto animate-fade-in">
-                    {/* Efecto de luz de fondo dinámica (Toma el color de la DB) */}
                     <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-glow-effect rounded-full blur-[100px] opacity-20 pointer-events-none -z-10"></div>
 
-                    {/* Logo Dinámico */}
                     <img 
                         src={tienda.logo_url || "https://cdn-icons-png.flaticon.com/512/900/900797.png"} 
                         alt={`Logo de ${tienda.nombre}`} 
                         className="w-40 h-40 rounded-full mx-auto mb-6 logo-glow object-cover bg-gray-900" 
                     />
                     
-                    {/* Títulos Dinámicos */}
                     <h1 className="text-4xl font-black text-white mb-2 tracking-wider uppercase drop-shadow-md">
                         {tienda.nombre}
                     </h1>
@@ -139,22 +154,19 @@
                         {tienda.mensaje_bienvenida || 'El mejor sabor hasta tu casa'}
                     </p>
 
-                    {/* Botonera Principal */}
                     <div className="space-y-4 relative z-20">
                         
-                        {/* Botón 1: HACER PEDIDO (Usa ruteo inteligente) */}
                         <a 
-                            href={linkMenu} 
+                            href={`menus.html?tienda=${identificador}`} 
                             className="block w-full text-white font-bold text-xl py-5 rounded-2xl shadow-lg hover:scale-105 active:scale-95 transition-all"
                             style={{ background: `linear-gradient(to right, ${tienda.color_primario || '#f97316'}, ${tienda.color_secundario || '#ef4444'})` }}
                         >
                             🛵 HACER UN PEDIDO
                         </a>
 
-                        {/* Botón 2: VER MENÚ EN IMÁGENES (Usa ruteo inteligente) */}
                         {tienda.menu_imagenes_url ? (
                             <a 
-                                href={linkImagenes} 
+                                href={`menu-imagenes.html?tienda=${identificador}`} 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
                                 className="block w-full bg-gray-800 text-white font-bold text-lg py-4 rounded-2xl border-2 border-gray-700 hover:bg-gray-700 active:scale-95 transition-all"
@@ -168,19 +180,20 @@
                             </div>
                         )}
 
-                        {/* Botón 3: UBICACIÓN (Arma el enlace con latitud y longitud) */}
-                        <a 
-                            href={`https://www.google.com/maps/search/?api=1&query=${tienda.latitud},${tienda.longitud}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="block w-full bg-blue-600/10 text-blue-400 font-bold text-lg py-4 rounded-2xl border border-blue-600/30 hover:bg-blue-600 hover:text-white active:scale-95 transition-all flex items-center justify-center gap-2"
-                        >
-                            📍 VER UBICACIÓN
-                        </a>
+                        {/* Defensiva: Solo se muestra el botón si realmente existen las coordenadas */}
+                        {tienda.latitud && tienda.longitud && (
+                            <a 
+                                href={`https://www.google.com/maps/search/?api=1&query=${tienda.latitud},${tienda.longitud}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="block w-full bg-blue-600/10 text-blue-400 font-bold text-lg py-4 rounded-2xl border border-blue-600/30 hover:bg-blue-600 hover:text-white active:scale-95 transition-all flex items-center justify-center gap-2"
+                            >
+                                📍 VER UBICACIÓN
+                            </a>
+                        )}
 
                     </div>
 
-                    {/* Footer */}
                     <p className="text-gray-500 text-xs mt-12 font-medium">
                         © {new Date().getFullYear()} {tienda.nombre}. Todos los derechos reservados.
                     </p>
@@ -188,40 +201,8 @@
             );
         };
 
-        // ==========================================
-        // INTERCEPTOR DE DOMINIO Y ARRANQUE SEGURO
-        // ==========================================
-        const initApp = async () => {
-            const hostname = window.location.hostname.replace('www.', '');
-            // NOTA: Asegúrate de poner aquí tu dominio genérico real de Netlify si difiere
-            const saasDomains = ['menus-delivery.netlify.app', 'localhost', '127.0.0.1'];
-            
-            if (!saasDomains.includes(hostname)) {
-                try {
-                    // Consulta con .ilike() para cazar el dominio aunque tenga https o rutas extra en la BD
-                    const { data, error } = await supabase
-                        .from('tiendas')
-                        .select('id')
-                        .ilike('dominio_personal', `%${hostname}%`)
-                        .single();
-                    
-                    if (data && data.id) {
-                        // 🔒 CANDADO CERRADO: Forzamos la Tienda dueña del dominio
-                        TIENDA_ID = data.id; 
-                        
-                        // Opcional: Como es el index, simplemente lo dejamos en '/'
-                        window.history.replaceState(null, '', '/');
-                    }
-                } catch (err) {
-                    console.warn("Este dominio no está registrado en ninguna tienda del SaaS.");
-                }
-            }
-
-            const root = ReactDOM.createRoot(document.getElementById('root'));
-            root.render(<App />);
-        };
-
-        initApp();
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
     </script>
 </body>
 </html>

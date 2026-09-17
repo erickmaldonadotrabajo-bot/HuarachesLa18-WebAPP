@@ -1,55 +1,39 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    
-    <!-- Configuraciones base del documento HTML5 para evitar zoom indeseado y adaptar a resoluciones moviles -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ADMIN SAAS | Panel de Control</title>
     
-    <!-- Vinculo al icono representativo que aparecera en la pestaña del navegador -->
     <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/900/900797.png">
-    
-    <!-- Importacion del framework Tailwind CSS mediante CDN para utilidades de maquetado -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Importacion de la libreria React, ReactDOM y Babel para el procesamiento en vivo de JSX -->
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
-    
-    <!-- Cliente oficial de Supabase para transacciones relacionales con la base de datos PostgreSQL -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
     <style>
-        /* Importacion de tipografia Poppins y definicion de estilos base del panel oscuro */
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700;900&display=swap');
-        
         body { 
             font-family: 'Poppins', sans-serif; 
             background-color: #111827; 
             color: white; 
         }
         
-        /* Estas dos clases ocultan las barras de desplazamiento manteniendo activa la funcion de scroll */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Configuracion de animacion base para la entrada fluida de las tarjetas de pedidos */
         .animate-card { animation: fade-in-up 0.3s ease-out forwards; }
         @keyframes fade-in-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
         
-        /* Reglas CSS para transformar checkboxes HTML genericos en interruptores deslizables tipo toggle */
         .toggle-checkbox:checked { right: 0; border-color: #68D391; }
         .toggle-checkbox:checked + .toggle-label { background-color: #68D391; }
 
-        /* Contenedor ancla para el ticket que permanece oculto en pantalla pero se utiliza en el buffer de impresion */
         #ticket-area {
             position: fixed; top: 0; left: -9999px; width: 58mm;
             background-color: white; color: black; z-index: -1;
         }
 
-        /* Reglas CSS estrictas que aplican unicamente durante el evento window.print() para impresoras termicas de 58mm ESC/POS */
         @media print {
             @page { size: 58mm auto; margin: 0mm; }
             body { margin: 0; padding: 0; background-color: white; }
@@ -73,62 +57,27 @@
             .ticket-box { border: 2px solid #000; padding: 5px; margin: 5px 0; font-weight: bold; text-align: left; font-size: 11px;}
         }
 
-        /* Animacion de pulso configurada en color verde para la alerta visual de nuevos pedidos */
         @keyframes alert-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
         .new-order-alert { animation: alert-pulse 2s infinite; }
     </style>
-    <!-- Evitar caché tradicional en navegadores -->
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
-
-    <!-- Auto-Actualizador del Panel -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/sw.js').then((registration) => {
-                    registration.update();
-                    registration.onupdatefound = () => {
-                        const installingWorker = registration.installing;
-                        installingWorker.onstatechange = () => {
-                            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                                console.log("Actualización del panel detectada. Recargando...");
-                                window.location.reload(true);
-                            }
-                        };
-                    };
-                }).catch(err => console.log('Error SW Admin:', err));
-            });
-        }
-    </script>
 </head>
 <body>
-    <!-- Contenedor root requerido por ReactDOM para iniciar la aplicacion -->
     <div id="root"></div>
 
     <script type="text/babel" data-type="module" data-presets="react">
-        // Importacion de los hooks base de React necesarios para gestionar ciclo de vida y variables mutables
         const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
-        // Captura del identificador numerico de la tienda a traves del string de consulta URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const TIENDA_ID = parseInt(urlParams.get('tienda')) || 1;
+        // GLOBALES (Inyectadas por el Interceptor)
+        let TIENDA_ID = null;
+        let TIENDA_SLUG = null;
 
-        // ==========================================
-        // CONFIGURA AQUÍ TU LINK DE NETLIFY EN VIVO
-        // ==========================================
-        const URL_PRODUCCION = 'https://TU-DOMINIO.netlify.app/menus.html';
-
-        // Instanciacion del cliente Supabase con credenciales de proyecto publicas
         const SUPABASE_URL = 'https://srhdgocsmswxidrwguhc.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_pWKDoEBfP3l2ggqYh_l7IA_SNq1Esfz';
         const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         
-        // Elemento global de audio mp3 configurado en bucle. Emite un sonido de campanilla suave de recepcion
         const alertSound = new Audio('https://assets.mixkit.co/active_storage/sfx/2870/2870-preview.mp3');
         alertSound.loop = true;
 
-        // Matriz constante de funciones SVG utilizadas como logotipos iconograficos en toda la interfaz
         const Icons = {
             Menu: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>,
             Search: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
@@ -147,10 +96,8 @@
             Chart: () => <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
         };
 
-        // Funcion auxiliar disenada para normalizar cadenas de texto eliminando diacriticos que causan errores en buffer de impresoras termicas
         const limpiarTexto = (t) => t ? String(t).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E]/g, "").trim() : "";
 
-        // Modulo React Portal que inyecta el codigo HTML del ticket fuera de la jerarquia nativa del DOM para la API window.print()
         const Ticket = ({ order, tienda }) => {
             if (!order || !tienda) return null;
             const date = new Date(order.created_at).toLocaleString('es-MX');
@@ -214,17 +161,14 @@
             );
         };
 
-        // Componente Card renderizado dentro del bucle de la vista principal "Orders". Representa visual y logica de una orden de compra especifica
         const OrderCard = ({ order, tienda, onComplete, onPrint, onCancel }) => {
             const date = new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             const handleComplete = () => { if(confirm("¿PEDIDO DESPACHADO?")) onComplete(order.id); };
             
-            // Escudo de seguridad (Gatekeeper) que intercepta el intento de eliminacion logica obligando a cruzar la variable de sesion del owner local
             const handleCancelClick = () => {
                 const pin = prompt("Introduce el PIN de administrador para cancelar este pedido:");
                 if (pin === null) return; 
-                
                 if (pin === (tienda.admin_pin || '1234')) {
                     onCancel(order.id);
                 } else {
@@ -236,7 +180,6 @@
             
             return (
                 <div className="bg-gray-800 rounded-xl border border-gray-700 shadow-xl overflow-hidden mb-6 animate-card max-w-full w-full">
-                    
                     <div className="bg-gray-900/50 p-4 border-b border-gray-700 flex justify-between items-center flex-wrap gap-2">
                         <div>
                             <span className="bg-orange-600 text-white text-xs font-bold px-2 py-1 rounded mr-2">#{order.id}</span>
@@ -248,7 +191,6 @@
                     </div>
 
                     <div className="p-4">
-                        
                         <div className="mb-4">
                             <h3 className="text-xl font-bold text-white leading-none break-words">{limpiarTexto(order.cliente_nombre)}</h3>
                             <a href={`tel:${order.cliente_telefono}`} className="text-orange-400 text-sm hover:underline flex items-center gap-1 mt-1 break-words">TEL: {order.cliente_telefono}</a>
@@ -311,14 +253,13 @@
             );
         };
 
-        // Componente transitorio sobrepuesto (Modal) instanciado para ejecuciones mutables (INSERT / UPDATE) hacia categorias o productos en BD
         const Modal = ({isOpen, onClose, type, editItem, categories, onSave}) => {
             const [form, setForm] = useState({});
             const [newTopping, setNewTopping] = useState("");
             const [toppingsList, setToppingsList] = useState([]);
             const [extrasList, setExtrasList] = useState([]);
             
-            const [uploadingField, setUploadingField] = useState(null); // Identifica cuál archivo se está subiendo
+            const [uploadingField, setUploadingField] = useState(null); 
             const [uploadProgress, setUploadProgress] = useState(0); 
             
             useEffect(() => {
@@ -346,9 +287,7 @@
                     setNewTopping(""); 
                 } 
             };
-            const removeTopping = (idx) => { 
-                setToppingsList(toppingsList.filter((_, i) => i !== idx)); 
-            };
+            const removeTopping = (idx) => { setToppingsList(toppingsList.filter((_, i) => i !== idx)); };
 
             const handleAddExtra = () => {
                 if (extrasList.length < 15) {
@@ -362,23 +301,14 @@
                 setExtrasList(newExtras);
             };
 
-            const removeExtra = (index) => {
-                setExtrasList(extrasList.filter((_, i) => i !== index));
-            };
+            const removeExtra = (index) => { setExtrasList(extrasList.filter((_, i) => i !== index)); };
 
-            // ==========================================
-            // LOGICA AVANZADA: ELIMINAR ARCHIVO (ANTI-BASURA)
-            // ==========================================
             const deleteOldFileFromBucket = async (url) => {
                 if (!url) return;
                 try {
-                    // Extraemos el nombre del archivo de la URL publica de Supabase
                     const urlParts = url.split('/');
                     const fileName = urlParts[urlParts.length - 1];
-                    if (fileName) {
-                        const { error } = await supabase.storage.from('productos').remove([fileName]);
-                        if (error) console.error("Error al borrar archivo huérfano:", error);
-                    }
+                    if (fileName) await supabase.storage.from('productos').remove([fileName]);
                 } catch (e) {
                     console.error("Fallo al intentar borrar archivo antiguo", e);
                 }
@@ -394,9 +324,6 @@
                 }
             };
 
-            // ==========================================
-            // LOGICA AVANZADA: COMPRIMIR VIDEO A SILENCIO (CANVAS)
-            // ==========================================
             const processVideoWithoutAudio = (file) => {
                 return new Promise((resolve, reject) => {
                     const videoNode = document.createElement('video');
@@ -405,18 +332,14 @@
                     videoNode.play().catch(e => reject("El navegador bloqueó la reproducción oculta"));
 
                     videoNode.onloadedmetadata = () => {
-                        // VALIDACION: Max 10 segundos
-                        if (videoNode.duration > 10) {
-                            reject("El video no puede durar más de 10 segundos.");
-                            return;
-                        }
+                        if (videoNode.duration > 10) { reject("El video no puede durar más de 10 segundos."); return; }
 
                         const canvas = document.createElement('canvas');
                         canvas.width = videoNode.videoWidth;
                         canvas.height = videoNode.videoHeight;
                         const ctx = canvas.getContext('2d');
 
-                        const stream = canvas.captureStream(30); // 30 FPS
+                        const stream = canvas.captureStream(30);
                         const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
                         const chunks = [];
 
@@ -437,11 +360,8 @@
                         };
                         drawFrame();
 
-                        videoNode.onended = () => {
-                            recorder.stop();
-                        };
+                        videoNode.onended = () => { recorder.stop(); };
                     };
-                    
                     videoNode.onerror = () => reject("Error al leer el archivo de video.");
                 });
             };
@@ -450,42 +370,30 @@
                 let file = e.target.files[0];
                 if (!file) return;
 
-                // VALIDACION DE PESO
-                if (file.size > 49 * 1024 * 1024) { // 49 MB
+                if (file.size > 49 * 1024 * 1024) { 
                     alert("Tu archivo es muy pesado (máximo 49 MB). Por favor, usa una aplicación externa para comprimirlo o bajarle la resolución.");
-                    e.target.value = null;
-                    return;
+                    e.target.value = null; return;
                 }
 
-                setUploadingField(field);
-                setUploadProgress(10); // Inicio simulado
+                setUploadingField(field); setUploadProgress(10); 
 
                 try {
-                    // Si el producto ya tenía un archivo, lo borramos primero
-                    if (form[field]) {
-                        await deleteOldFileFromBucket(form[field]);
-                    }
+                    if (form[field]) { await deleteOldFileFromBucket(form[field]); }
 
-                    // Procesamiento especial si es Video
                     if (field === 'video_url') {
                         setUploadProgress(30);
                         try {
-                            // Intentamos quitarle el audio y comprimirlo
                             file = await processVideoWithoutAudio(file);
                             setUploadProgress(50);
                         } catch (err) {
-                            setUploadingField(null);
-                            setUploadProgress(0);
+                            setUploadingField(null); setUploadProgress(0);
                             alert(`Error procesando el video: ${err}`);
                             return;
                         }
-                    } else {
-                        setUploadProgress(50);
-                    }
+                    } else { setUploadProgress(50); }
 
                     const fileExt = file.name.split('.').pop() || (field === 'video_url' ? 'webm' : 'jpg');
                     const fileName = `${field === 'video_url' ? 'vid' : 'img'}_${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-                    
                     setUploadProgress(70);
 
                     const { error: uploadError } = await supabase.storage.from('productos').upload(fileName, file);
@@ -497,36 +405,24 @@
 
                     setTimeout(() => {
                         setForm(prev => ({ ...prev, [field]: publicUrl }));
-                        setUploadingField(null);
-                        setUploadProgress(0);
+                        setUploadingField(null); setUploadProgress(0);
                     }, 500);
 
                 } catch (err) {
-                    console.error("Error subiendo archivo:", err);
                     alert('Error al subir. Asegúrate de haber creado el bucket "productos" en Supabase.');
-                    setUploadingField(null);
-                    setUploadProgress(0);
+                    setUploadingField(null); setUploadProgress(0);
                 }
             };
             
             const handleSubmit = (e) => { 
                 e.preventDefault(); 
-                
                 const cleanExtras = extrasList.filter(ext => ext.nombre.trim() !== '');
 
                 let finalData;
                 if (type === 'category') {
-                    finalData = { 
-                        nombre: form.nombre, 
-                        nota_preparacion: form.nota_preparacion
-                    };
+                    finalData = { nombre: form.nombre, nota_preparacion: form.nota_preparacion };
                 } else {
-                    finalData = { 
-                        ...form, 
-                        extras: cleanExtras,
-                        has_extra: cleanExtras.length > 0,
-                        removables: toppingsList 
-                    };
+                    finalData = { ...form, extras: cleanExtras, has_extra: cleanExtras.length > 0, removables: toppingsList };
                 }
                 
                 onSave(finalData, editItem?.id); 
@@ -545,12 +441,10 @@
                             </div>
                             
                             {type === 'category' && (
-                                <React.Fragment>
-                                    <div>
-                                        <label className="block text-gray-400 text-sm mb-1">Descripción / Nota</label>
-                                        <input value={form.nota_preparacion || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" placeholder="Ej: Especialidad de la casa..." onChange={e => setForm({...form, nota_preparacion: e.target.value})} disabled={uploadingField !== null} />
-                                    </div>
-                                </React.Fragment>
+                                <div>
+                                    <label className="block text-gray-400 text-sm mb-1">Descripción / Nota</label>
+                                    <input value={form.nota_preparacion || ''} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 text-white outline-none" placeholder="Ej: Especialidad de la casa..." onChange={e => setForm({...form, nota_preparacion: e.target.value})} disabled={uploadingField !== null} />
+                                </div>
                             )}
                             
                             {type === 'product' && (
@@ -583,7 +477,6 @@
                                             <div className="flex gap-2">
                                                 <input type="text" value={form.video_url || ''} className="flex-1 bg-gray-900 border border-gray-600 rounded-lg p-3 text-gray-500 outline-none focus:border-orange-500 min-w-0" placeholder="https://..." readOnly />
                                                 
-                                                {/* Boton para eliminar archivo guardado */}
                                                 {form.video_url && (
                                                     <button type="button" onClick={() => handleRemoveMedia('video_url')} className="bg-red-900/50 border border-red-700 rounded-lg px-3 text-red-400 hover:bg-red-800 transition shrink-0" title="Eliminar Video">
                                                         <Icons.Trash />
@@ -609,7 +502,6 @@
                                             <div className="flex gap-2">
                                                 <input type="text" value={form.image_url || ''} className="flex-1 bg-gray-900 border border-gray-600 rounded-lg p-3 text-gray-500 outline-none focus:border-orange-500 min-w-0" placeholder="https://..." readOnly />
                                                 
-                                                {/* Boton para eliminar archivo guardado */}
                                                 {form.image_url && (
                                                     <button type="button" onClick={() => handleRemoveMedia('image_url')} className="bg-red-900/50 border border-red-700 rounded-lg px-3 text-red-400 hover:bg-red-800 transition shrink-0" title="Eliminar Imagen">
                                                         <Icons.Trash />
@@ -670,7 +562,6 @@
             );
         };
 
-        // Instanciador transaccional padre que rige toda logica base, consultas relacionales directas via API, ruteos inter-componentes y subscripciones socket
         const App = () => {
             const [isAuthenticated, setIsAuthenticated] = useState(() => localStorage.getItem(`admin_auth_${TIENDA_ID}`) === 'true');
             const [pinInput, setPinInput] = useState('');
@@ -682,22 +573,16 @@
             const [products, setProducts] = useState([]);
             const [orders, setOrders] = useState([]);
             const [historyOrders, setHistoryOrders] = useState([]); 
-            const [activeCat, setActiveCat] = useState('');
+            const [activeCat, setActiveCat] = useState('Todas');
             const [search, setSearch] = useState('');
             const [modal, setModal] = useState({open: false, type: null, editItem: null});
             const [loading, setLoading] = useState(true);
             const [ticketOrder, setTicketOrder] = useState(null);
             const [toastMsg, setToastMsg] = useState('');
-            
             const [hasNewOrder, setHasNewOrder] = useState(false);
 
             const [stats, setStats] = useState({
-                ventasSemana: 0,
-                ventasMes: 0,
-                canceladosSemana: 0,
-                canceladosMes: 0,
-                masVendido: '-',
-                menosVendido: '-'
+                ventasSemana: 0, ventasMes: 0, canceladosSemana: 0, canceladosMes: 0, masVendido: '-', menosVendido: '-'
             });
 
             const [historyFilterDays, setHistoryFilterDays] = useState(1);
@@ -705,7 +590,6 @@
 
             const [configForm, setConfigForm] = useState(null);
             const [uploadingLogo, setUploadingLogo] = useState(false);
-            
             const [logoUploadProgress, setLogoUploadProgress] = useState(0); 
 
             const [autoPrint, setAutoPrint] = useState(() => localStorage.getItem('saas_autoprint') === 'true');
@@ -717,17 +601,13 @@
             }, [autoPrint]);
 
             const showToast = useCallback((msg) => { 
-                setToastMsg(msg); 
-                setTimeout(() => setToastMsg(''), 3000); 
+                setToastMsg(msg); setTimeout(() => setToastMsg(''), 3000); 
             }, []);
 
             const loadStats = async () => {
                 try {
-                    const date30DaysAgo = new Date();
-                    date30DaysAgo.setDate(date30DaysAgo.getDate() - 30);
-                    
-                    const date7DaysAgo = new Date();
-                    date7DaysAgo.setDate(date7DaysAgo.getDate() - 7);
+                    const date30DaysAgo = new Date(); date30DaysAgo.setDate(date30DaysAgo.getDate() - 30);
+                    const date7DaysAgo = new Date(); date7DaysAgo.setDate(date7DaysAgo.getDate() - 7);
 
                     const { data, error } = await supabase
                         .from('pedidos')
@@ -738,48 +618,33 @@
 
                     if (error || !data) return;
 
-                    let vSemana = 0; let vMes = 0;
-                    let cSemana = 0; let cMes = 0;
-                    let productsCount = {};
+                    let vSemana = 0; let vMes = 0; let cSemana = 0; let cMes = 0; let productsCount = {};
 
                     data.forEach(p => {
                         const isSemana = new Date(p.created_at) >= date7DaysAgo;
-                        
                         if (p.estado === 'despachado') {
                             vMes += parseFloat(p.total_final) || 0;
                             if (isSemana) vSemana += parseFloat(p.total_final) || 0;
-
                             const items = Array.isArray(p.detalle_json) ? p.detalle_json : (typeof p.detalle_json === 'string' ? JSON.parse(p.detalle_json) : []);
-                            items.forEach(item => {
-                                productsCount[item.nombre] = (productsCount[item.nombre] || 0) + (item.qty || 1);
-                            });
+                            items.forEach(item => { productsCount[item.nombre] = (productsCount[item.nombre] || 0) + (item.qty || 1); });
                         } else if (p.estado === 'cancelado') {
-                            cMes += 1;
-                            if (isSemana) cSemana += 1;
+                            cMes += 1; if (isSemana) cSemana += 1;
                         }
                     });
 
-                    let maxSold = '-'; let minSold = '-';
-                    let maxCount = -1; let minCount = Infinity;
-                    
+                    let maxSold = '-'; let minSold = '-'; let maxCount = -1; let minCount = Infinity;
                     Object.entries(productsCount).forEach(([name, count]) => {
                         if (count > maxCount) { maxCount = count; maxSold = name; }
                         if (count < minCount) { minCount = count; minSold = name; }
                     });
 
                     setStats({
-                        ventasSemana: vSemana,
-                        ventasMes: vMes,
-                        canceladosSemana: cSemana,
-                        canceladosMes: cMes,
+                        ventasSemana: vSemana, ventasMes: vMes, canceladosSemana: cSemana, canceladosMes: cMes,
                         masVendido: maxCount > -1 ? `${maxSold} (${maxCount})` : 'Sin datos',
                         menosVendido: minCount < Infinity ? `${minSold} (${minCount})` : 'Sin datos'
                     });
-
                     setHistoryOrders(data);
-                } catch (e) {
-                    console.error("Error al cargar stats:", e);
-                }
+                } catch (e) { console.error("Error al cargar stats:", e); }
             };
 
             const fetchData = useCallback(async () => {
@@ -794,14 +659,13 @@
                 
                 setCategories(cats || []); 
                 setProducts(prods || []);
-                if (cats && cats.length > 0 && !activeCat) setActiveCat(cats[0].nombre);
                 
                 const { data: ords } = await supabase.from('pedidos').select('*').eq('tienda_id', TIENDA_ID).eq('estado', 'pendiente').order('created_at', {ascending: false});
                 setOrders(ords || []);
                 
                 loadStats();
                 setLoading(false);
-            }, [activeCat]);
+            }, []);
 
             useEffect(() => {
                 if (isAuthenticated) {
@@ -827,29 +691,20 @@
                 }
             }, [isAuthenticated, fetchData]);
 
-            const acknowledgeNewOrder = () => {
-                setHasNewOrder(false);
-                alertSound.pause();
-                alertSound.currentTime = 0;
-            };
+            const acknowledgeNewOrder = () => { setHasNewOrder(false); alertSound.pause(); alertSound.currentTime = 0; };
 
             const handleLogin = async (e) => {
                 e.preventDefault();
                 setLoginError(false);
                 const { data, error } = await supabase.from('tiendas').select('admin_pin').eq('id', TIENDA_ID).single();
                 
-                if (error || !data) {
-                    setLoginError(true);
-                    return;
-                }
+                if (error || !data) { setLoginError(true); return; }
 
                 const correctPin = data.admin_pin || '1234';
                 if (pinInput === correctPin) {
                     setIsAuthenticated(true);
                     localStorage.setItem(`admin_auth_${TIENDA_ID}`, 'true');
-                } else {
-                    setLoginError(true);
-                }
+                } else { setLoginError(true); }
             };
 
             const handleLogout = () => {
@@ -873,26 +728,22 @@
                 }, 400);
 
                 try {
-                    // LOGICA DE BORRADO DE LOGO ANTERIOR EN SUPABASE
                     if (configForm.logo_url) {
                         const urlParts = configForm.logo_url.split('/');
                         const oldFileName = urlParts[urlParts.length - 1];
-                        if (oldFileName) {
-                            await supabase.storage.from('logos').remove([oldFileName]);
-                        }
+                        if (oldFileName) await supabase.storage.from('logos').remove([oldFileName]);
                     }
 
                     const fileExt = file.name.split('.').pop();
                     const fileName = `logo_${TIENDA_ID}_${Date.now()}.${fileExt}`;
-                    const filePath = `${fileName}`;
-
-                    const { error: uploadError } = await supabase.storage.from('logos').upload(filePath, file);
+                    
+                    const { error: uploadError } = await supabase.storage.from('logos').upload(fileName, file);
                     if (uploadError) throw uploadError;
 
                     clearInterval(progressInterval);
                     setLogoUploadProgress(100);
 
-                    const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(filePath);
+                    const { data: { publicUrl } } = supabase.storage.from('logos').getPublicUrl(fileName);
 
                     setTimeout(() => {
                         setConfigForm(prev => ({ ...prev, logo_url: publicUrl }));
@@ -902,49 +753,33 @@
                     }, 500);
                 } catch (err) {
                     clearInterval(progressInterval);
-                    console.error("Error subiendo logo:", err);
                     showToast('Error al subir. Revisa las politicas del Bucket.');
-                    setUploadingLogo(false);
-                    setLogoUploadProgress(0);
+                    setUploadingLogo(false); setLogoUploadProgress(0);
                 }
             };
 
             const saveStoreSettings = async (e) => {
                 e.preventDefault();
                 const updateData = {
-                    nombre: configForm.nombre,
-                    telefono_whatsapp: configForm.telefono_whatsapp,
-                    logo_url: configForm.logo_url,
-                    mensaje_bienvenida: configForm.mensaje_bienvenida,
-                    mensaje_cerrado: configForm.mensaje_cerrado,
-                    horarios_texto: configForm.horarios_texto,
-                    color_primario: configForm.color_primario,
-                    color_secundario: configForm.color_secundario,
-                    color_fondo: configForm.color_fondo,
-                    color_delivery: configForm.color_delivery,
-                    color_pickup: configForm.color_pickup,
-                    latitud: parseFloat(configForm.latitud),
-                    longitud: parseFloat(configForm.longitud),
-                    porcentaje_tarjeta: parseFloat(configForm.porcentaje_tarjeta),
-                    datos_bancarios: configForm.datos_bancarios,
+                    nombre: configForm.nombre, telefono_whatsapp: configForm.telefono_whatsapp, logo_url: configForm.logo_url,
+                    mensaje_bienvenida: configForm.mensaje_bienvenida, mensaje_cerrado: configForm.mensaje_cerrado,
+                    horarios_texto: configForm.horarios_texto, color_primario: configForm.color_primario,
+                    color_secundario: configForm.color_secundario, color_fondo: configForm.color_fondo,
+                    color_delivery: configForm.color_delivery, color_pickup: configForm.color_pickup,
+                    latitud: parseFloat(configForm.latitud), longitud: parseFloat(configForm.longitud),
+                    porcentaje_tarjeta: parseFloat(configForm.porcentaje_tarjeta), datos_bancarios: configForm.datos_bancarios,
                     max_delivery_radius: parseFloat(configForm.max_delivery_radius),
                     delivery_tiers: Array.isArray(configForm.delivery_tiers) ? configForm.delivery_tiers : []
                 };
 
-                if (configForm.admin_pin && configForm.admin_pin.trim() !== '') {
-                    updateData.admin_pin = configForm.admin_pin.trim();
-                }
+                if (configForm.admin_pin && configForm.admin_pin.trim() !== '') { updateData.admin_pin = configForm.admin_pin.trim(); }
 
                 try {
                     const { error } = await supabase.from('tiendas').update(updateData).eq('id', TIENDA_ID);
                     if (error) throw error;
-                    
                     setTienda({...tienda, ...updateData});
                     showToast('¡Ajustes guardados correctamente!');
-                } catch (err) {
-                    console.error(err);
-                    showToast('Error al guardar ajustes.');
-                }
+                } catch (err) { showToast('Error al guardar ajustes.'); }
             };
 
             const handleTierChange = (index, field, value) => {
@@ -969,14 +804,12 @@
             const toggleStore = async () => { 
                 const newState = !tienda.abierto; 
                 setTienda({...tienda, abierto: newState}); 
-                
                 try {
                     const { error } = await supabase.from('tiendas').update({ abierto: newState }).eq('id', TIENDA_ID); 
                     if(error) throw error;
                     showToast(newState ? "✅ Tienda ABIERTA" : "🛑 Tienda CERRADA");
                 } catch (err) {
-                    showToast("Error de red.");
-                    setTienda({...tienda, abierto: !newState});
+                    showToast("Error de red."); setTienda({...tienda, abierto: !newState});
                 }
             };
             
@@ -992,8 +825,6 @@
             
             const deleteProduct = async (item) => { 
                 if(!confirm("Borrar producto?")) return; 
-                
-                // Borrar archivos asociados si los tiene antes de borrar el producto de la DB
                 if (item.image_url) {
                     const urlParts = item.image_url.split('/');
                     await supabase.storage.from('productos').remove([urlParts[urlParts.length - 1]]);
@@ -1002,15 +833,12 @@
                     const urlParts = item.video_url.split('/');
                     await supabase.storage.from('productos').remove([urlParts[urlParts.length - 1]]);
                 }
-
                 setProducts(prev => prev.filter(p => p.id !== item.id)); 
                 await supabase.from('menu_items').delete().eq('id', item.id); 
             };
             
             const deleteCategory = async (id) => { 
                 if(!confirm("Borrar categoria y productos?")) return; 
-                // Nota: Idealmente aqui tambien deberiamos borrar los archivos de los productos de esta categoria
-                // pero eso requeriria una consulta previa. Lo dejamos simple por ahora o requeriría un Trigger en SQL
                 await supabase.from('categorias').delete().eq('id', id); 
                 setCategories(prev => prev.filter(c => c.id !== id)); 
             };
@@ -1031,20 +859,36 @@
                 fetchData();
             };
 
-            const handlePrint = (order) => { 
-                setTicketOrder(order); 
-                setTimeout(() => { window.print(); }, 500); 
-            };
+            const handlePrint = (order) => { setTicketOrder(order); setTimeout(() => { window.print(); }, 500); };
 
+            // BUSCADOR EN TIEMPO REAL OPTIMIZADO
             const processedInventory = useMemo(() => {
                 if (!categories.length) return [];
-                let activeCats = search ? categories : categories.filter(c => c.nombre === activeCat);
                 
-                return activeCats.map(cat => {
-                    let items = products.filter(p => p.categoria_id === cat.id && p.nombre.toLowerCase().includes(search.toLowerCase()));
-                    items.sort((a, b) => a.orden - b.orden);
-                    return { ...cat, items };
-                }).filter(c => c.items.length > 0 || (!search && c.nombre === activeCat));
+                // Si hay búsqueda activa, ignoramos la categoria seleccionada y buscamos en todo
+                if (search.trim() !== '') {
+                    const searchLower = search.toLowerCase();
+                    return categories.map(cat => {
+                        let items = products.filter(p => p.categoria_id === cat.id && p.nombre.toLowerCase().includes(searchLower));
+                        items.sort((a, b) => a.orden - b.orden);
+                        return { ...cat, items };
+                    }).filter(c => c.items.length > 0);
+                }
+                
+                // Si NO hay búsqueda, filtramos por la categoria activa
+                if (activeCat === 'Todas') {
+                    return categories.map(cat => {
+                        let items = products.filter(p => p.categoria_id === cat.id);
+                        items.sort((a, b) => a.orden - b.orden);
+                        return { ...cat, items };
+                    }).filter(c => c.items.length > 0);
+                } else {
+                    return categories.filter(c => c.nombre === activeCat).map(cat => {
+                        let items = products.filter(p => p.categoria_id === cat.id);
+                        items.sort((a, b) => a.orden - b.orden);
+                        return { ...cat, items };
+                    });
+                }
             }, [categories, products, activeCat, search]);
 
             const filteredHistoryList = useMemo(() => {
@@ -1052,11 +896,9 @@
                 return historyOrders.filter(o => {
                     if (o.estado === 'pendiente') return false; 
                     if (historyFilterStatus !== 'todos' && o.estado !== historyFilterStatus) return false;
-
                     const orderDate = new Date(o.created_at);
                     const diffTime = Math.abs(now - orderDate);
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    
                     return diffDays <= historyFilterDays;
                 });
             }, [historyOrders, historyFilterDays, historyFilterStatus]);
@@ -1065,25 +907,13 @@
                 return (
                     <div className="min-h-screen flex items-center justify-center p-4 bg-gray-950">
                         <div className="bg-gray-900 border border-gray-800 p-8 rounded-3xl max-w-md w-full shadow-2xl text-center animate-card">
-                            <div className="w-16 h-16 bg-orange-600/20 text-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-orange-600/30">
-                                <Icons.Lock />
-                            </div>
+                            <div className="w-16 h-16 bg-orange-600/20 text-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-orange-600/30"><Icons.Lock /></div>
                             <h1 className="text-2xl font-black text-white tracking-wide mb-2">Panel Administrativo</h1>
-                            <p className="text-gray-400 text-sm mb-6">Ingresa la contraseña de acceso para la Tienda #{TIENDA_ID}</p>
-                            
+                            <p className="text-gray-400 text-sm mb-6">Ingresa la contraseña de acceso</p>
                             <form onSubmit={handleLogin} className="space-y-4">
-                                <input
-                                    type="password"
-                                    required
-                                    placeholder="Contraseña PIN (ej. 1234)"
-                                    value={pinInput}
-                                    onChange={e => setPinInput(e.target.value)}
-                                    className="w-full bg-gray-950 border border-gray-700 rounded-xl p-4 text-white text-center text-xl tracking-widest outline-none focus:border-orange-500 shadow-inner"
-                                />
+                                <input type="password" required placeholder="Contraseña PIN (ej. 1234)" value={pinInput} onChange={e => setPinInput(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded-xl p-4 text-white text-center text-xl tracking-widest outline-none focus:border-orange-500 shadow-inner" />
                                 {loginError && <p className="text-red-500 text-xs font-bold">Contraseña incorrecta. Intenta de nuevo.</p>}
-                                <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg active:scale-95">
-                                    INGRESAR AL PANEL
-                                </button>
+                                <button type="submit" className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all text-lg active:scale-95">INGRESAR AL PANEL</button>
                             </form>
                         </div>
                     </div>
@@ -1093,11 +923,8 @@
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900"><div className="loader"></div></div>;
 
             const safeTiers = configForm && Array.isArray(configForm.delivery_tiers) ? configForm.delivery_tiers : [];
-
-            // ==========================================
-            // VARIABLE PARA EL LINK DEL QR
-            // ==========================================
             const URL_PRODUCCION = 'https://menus-delivery.netlify.app/menus.html';
+            const identificador = tienda?.slug || TIENDA_ID;
 
             return (
                 <div className="pb-20">
@@ -1108,9 +935,7 @@
                             <div className="bg-green-600 border-8 border-white p-8 md:p-12 rounded-[3rem] shadow-[0_0_100px_rgba(255,255,255,0.5)] text-center flex flex-col items-center animate-pulse">
                                 <div className="text-7xl mb-4">🛎️</div>
                                 <h1 className="text-4xl md:text-6xl font-black text-white mb-8 tracking-widest uppercase drop-shadow-lg">¡Nuevo Pedido!</h1>
-                                <button onClick={acknowledgeNewOrder} className="bg-white text-green-600 font-black text-xl md:text-3xl px-10 py-6 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-2xl">
-                                    ✅ ENTERADO (APAGAR ALARMA)
-                                </button>
+                                <button onClick={acknowledgeNewOrder} className="bg-white text-green-600 font-black text-xl md:text-3xl px-10 py-6 rounded-2xl hover:scale-105 active:scale-95 transition-all shadow-2xl">✅ ENTERADO (APAGAR ALARMA)</button>
                             </div>
                         </div>
                     )}
@@ -1140,9 +965,7 @@
                                     </div>
                                 </div>
 
-                                <button onClick={handleLogout} className="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/50 px-3 py-2 rounded-lg text-xs font-bold transition-all">
-                                    SALIR
-                                </button>
+                                <button onClick={handleLogout} className="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white border border-red-600/50 px-3 py-2 rounded-lg text-xs font-bold transition-all">SALIR</button>
                             </div>
                         </div>
                         
@@ -1270,13 +1093,27 @@
 
                     {view === 'inventory' && (
                         <div className="p-4 animate-card max-w-4xl mx-auto w-full">
-                            <div className="sticky top-[130px] z-40 bg-gray-900/95 backdrop-blur py-2 -mx-4 px-4 border-b border-gray-800">
-                                <div className="relative mb-3">
-                                    <input type="text" placeholder="Buscar producto..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full bg-gray-800 text-white p-3 pl-10 rounded-xl border border-gray-700 focus:border-orange-500 outline-none"/>
-                                    <div className="absolute left-3 top-3.5 text-gray-500"><Icons.Search/></div>
+                            
+                            {/* NUEVA BARRA DE HERRAMIENTAS (Buscador + Botones) */}
+                            <div className="sticky top-[130px] z-40 bg-gray-900/95 backdrop-blur py-3 -mx-4 px-4 border-b border-gray-800 flex flex-col gap-3">
+                                
+                                <div className="flex gap-2">
+                                    <div className="relative flex-1">
+                                        <input type="text" placeholder="Buscar producto en vivo..." value={search} onChange={e=>setSearch(e.target.value)} className="w-full bg-gray-800 text-white p-3 pl-10 rounded-xl border border-gray-700 focus:border-orange-500 outline-none"/>
+                                        <div className="absolute left-3 top-3.5 text-gray-500"><Icons.Search/></div>
+                                        {search && <button onClick={() => setSearch('')} className="absolute right-3 top-3.5 text-gray-500 hover:text-white"><Icons.X/></button>}
+                                    </div>
+                                    <button onClick={()=>setModal({open: true, type: 'category', editItem: null})} className="bg-gray-700 text-white px-4 rounded-xl border border-gray-600 hover:bg-gray-600 transition flex items-center justify-center font-bold text-sm shrink-0 whitespace-nowrap">
+                                        + CAT
+                                    </button>
+                                    <button onClick={()=>setModal({open: true, type: 'product', editItem: null})} className="bg-orange-600 text-white px-4 rounded-xl hover:bg-orange-500 transition flex items-center justify-center font-bold text-sm shrink-0 whitespace-nowrap">
+                                        + PROD
+                                    </button>
                                 </div>
+
                                 {!search && (
-                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-2">
+                                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                                        <button onClick={()=>setActiveCat('Todas')} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold border transition-colors ${activeCat === 'Todas' ? 'bg-white text-black border-white' : 'bg-transparent text-gray-400 border-gray-600'}`}>Todas</button>
                                         {categories.map(c => (
                                             <button key={c.id} onClick={()=>setActiveCat(c.nombre)} className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-bold border transition-colors ${activeCat === c.nombre ? 'bg-white text-black border-white' : 'bg-transparent text-gray-400 border-gray-600'}`}>{c.nombre}</button>
                                         ))}
@@ -1285,6 +1122,10 @@
                             </div>
                             
                             <div className="space-y-8 mt-4">
+                                {processedInventory.length === 0 && search && (
+                                    <div className="text-center py-10 text-gray-500">No se encontraron productos con "{search}"</div>
+                                )}
+                                
                                 {processedInventory.map(cat => (
                                     <div key={cat.id}>
                                         <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-3">
@@ -1335,11 +1176,6 @@
                                         </div>
                                     </div>
                                 ))}
-                            </div>
-                            
-                            <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50">
-                                <button onClick={()=>setModal({open: true, type: 'category', editItem: null})} className="bg-gray-700 text-white p-3 rounded-full shadow-lg border border-gray-600 hover:scale-105 transition"><span className="text-xs font-bold">CAT</span></button>
-                                <button onClick={()=>setModal({open: true, type: 'product', editItem: null})} className="bg-orange-600 text-white p-4 rounded-full shadow-xl shadow-orange-500/20 hover:scale-110 transition active:scale-95"><Icons.Plus/></button>
                             </div>
                         </div>
                     )}
@@ -1412,7 +1248,7 @@
                                     <p className="text-gray-400 text-xs mb-4">Descarga este código para imprimirlo y ponerlo en las mesas de tu establecimiento.</p>
                                     <div className="bg-white p-4 rounded-2xl shadow-inner inline-block mb-4">
                                         <img 
-                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(URL_PRODUCCION + '?tienda=' + TIENDA_ID)}`} 
+                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(URL_PRODUCCION + '?tienda=' + identificador)}`} 
                                             alt="QR Code Menú" 
                                             className="w-48 h-48 object-contain mx-auto"
                                         />
@@ -1420,7 +1256,7 @@
                                     <div>
                                         <button 
                                             type="button"
-                                            onClick={() => window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(URL_PRODUCCION + '?tienda=' + TIENDA_ID)}`, '_blank')} 
+                                            onClick={() => window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(URL_PRODUCCION + '?tienda=' + identificador)}`, '_blank')} 
                                             className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all active:scale-95"
                                         >
                                             📥 DESCARGAR QR EN ALTA CALIDAD
@@ -1478,9 +1314,72 @@
             );
         };
 
-        // Inyeccion en raiz para finalizacion del ciclo de arranque del navegador
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App/>);
+        // ==========================================
+        // ARRANQUE Y CANDADO MAESTRO (ADMIN)
+        // ==========================================
+        const initApp = async () => {
+            const parametroTienda = new URLSearchParams(window.location.search).get('tienda');
+
+            // 1. FILTRO: Acceso denegado si no hay parámetro
+            if (!parametroTienda || parametroTienda.trim() === '') {
+                document.body.innerHTML = `
+                    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">🛑</div>
+                        <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Acceso Denegado</h2>
+                        <p style="color: #d1d5db;">No se especificó ninguna tienda en el enlace.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            try {
+                let query = supabase.from('tiendas').select('id, slug');
+
+                // 2. LLAVE CAMALEÓNICA
+                if (/^\d+$/.test(parametroTienda)) {
+                    query = query.eq('id', parseInt(parametroTienda));
+                } else {
+                    query = query.eq('slug', parametroTienda);
+                }
+
+                const { data, error } = await query.single();
+
+                if (error || !data) {
+                    document.body.innerHTML = `
+                        <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                            <div style="font-size: 4rem; margin-bottom: 1rem;">🛑</div>
+                            <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Tienda no encontrada</h2>
+                            <p style="color: #d1d5db;">El enlace es incorrecto o la tienda no existe.</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // 3. ASIGNACIÓN GLOBAL PARA EL ADMIN
+                TIENDA_ID = data.id;
+                TIENDA_SLUG = data.slug || data.id;
+
+                // 4. MAGIA: REEMPLAZO SILENCIOSO POR SLUG
+                if (data.slug && parametroTienda !== data.slug) {
+                    window.history.replaceState(null, '', `${window.location.pathname}?tienda=${data.slug}`);
+                }
+
+                // 5. ARRANCAR APLICACIÓN ADMIN
+                const root = ReactDOM.createRoot(document.getElementById('root'));
+                root.render(<App />);
+
+            } catch (err) {
+                document.body.innerHTML = `
+                    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">⚠️</div>
+                        <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Error de conexión</h2>
+                        <p style="color: #d1d5db;">No pudimos conectar con el servidor.</p>
+                    </div>
+                `;
+            }
+        };
+
+        initApp();
     </script>
 </body>
 </html>
