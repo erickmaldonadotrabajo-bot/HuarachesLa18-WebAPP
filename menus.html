@@ -1,20 +1,23 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <!-- Configuraciones base del documento HTML5 para renderizado responsivo sin zoom forzado -->
+    <!-- ========================================== -->
+    <!-- AUTO-ACTUALIZADOR: BLOQUEO DE CACHÉ BÁSICO -->
+    <!-- ========================================== -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cargando Menú...</title>
     
-    <!-- Preconexion y descarga de la tipografia principal para reducir tiempos de renderizado -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;700;900&display=swap" rel="stylesheet">
     
-    <!-- Inyeccion de Tailwind CSS via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Modificacion dinamica de Tailwind para soportar variables CSS inyectadas -->
     <script>
         tailwind.config = {
             theme: {
@@ -29,14 +32,33 @@
         }
     </script>
     
-    <!-- Importacion de librerias de arquitectura: React, ReactDOM y Babel -->
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
-    
-    <!-- SDK Oficial de Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
     
+    <!-- ========================================== -->
+    <!-- AUTO-ACTUALIZADOR: RECARGA SILENCIOSA (SW) -->
+    <!-- ========================================== -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then((registration) => {
+                    registration.update();
+                    registration.onupdatefound = () => {
+                        const installingWorker = registration.installing;
+                        installingWorker.onstatechange = () => {
+                            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log("🔥 Nueva versión de Menú detectada. Recargando...");
+                                window.location.reload(true);
+                            }
+                        };
+                    };
+                }).catch(err => console.log('Error SW Menu:', err));
+            });
+        }
+    </script>
+
     <style>
         body { 
             font-family: 'Poppins', sans-serif; 
@@ -89,7 +111,7 @@
 <body class="text-gray-800 min-h-screen text-lg selection:bg-brandPrimary selection:text-white">
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module" data-presets="react">
+    <script type="text/babel" data-type="module" data-presets="react" id="app-menus-v4">
         const { useState, useEffect, useMemo, useCallback, memo, useRef } = React;
 
         // GLOBALES (Se asignan dinámicamente antes de arrancar React)
@@ -322,7 +344,6 @@
             );
         });
 
-        // App Componente (El motor de la app, asume que TIENDA_ID ya existe)
         const App = () => {
             const [storeConfig, setStoreConfig] = useState(null);
             const [categoriesDB, setCategoriesDB] = useState([]);
@@ -338,7 +359,7 @@
                         await navigator.share({
                             title: `MENU DIGITAL DE ${storeConfig.nombre}`,
                             text: `¡Mira el menú de ${storeConfig.nombre} y pidamos algo buenísimo! 🍔🔥`,
-                            url: window.location.href // Ahora comparte limpiamente la URL con su slug
+                            url: window.location.href // Ahora comparte limpiamente la URL con su slug o dominio limpio
                         });
                     } catch (err) { console.log('Error compartiendo:', err); }
                 } else {
@@ -350,7 +371,6 @@
             useEffect(() => {
                 const fetchStoreData = async () => {
                     try {
-                        // Como el Interceptor ya validó el TIENDA_ID, hacemos las consultas de golpe
                         const { data: tienda, error: errTienda } = await supabase.from('tiendas').select('*').eq('id', TIENDA_ID).single();
                         if (errTienda || !tienda) throw new Error("Tienda no encontrada");
                         
@@ -377,7 +397,6 @@
 
                     } catch (err) {
                         console.error("Error cargando SaaS:", err);
-                        // El error fuerte ya lo cubre el interceptor, esto es por si falla algo interno
                     } finally {
                         setIsLoading(false);
                     }
@@ -885,56 +904,91 @@
         };
 
         // ==========================================
-        // ARRANQUE Y CANDADO MAESTRO
+        // ARRANQUE Y CANDADO MAESTRO (ACTUALIZADO)
         // ==========================================
         const initApp = async () => {
             const parametroTienda = new URLSearchParams(window.location.search).get('tienda');
+            
+            const getCleanDomain = () => {
+                let hostname = window.location.hostname;
+                hostname = hostname.replace(/^www\./, ''); 
+                hostname = hostname.split(':')[0]; 
+                return hostname.trim().toLowerCase(); 
+            };
 
-            // 1. FILTRO DE SEGURIDAD
-            if (!parametroTienda || parametroTienda.trim() === '') {
-                document.body.innerHTML = `
-                    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
-                        <div style="font-size: 4rem; margin-bottom: 1rem;">🚫</div>
-                        <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Acceso Denegado</h2>
-                        <p style="color: #d1d5db;">No se especificó ninguna tienda en el enlace.</p>
-                    </div>
-                `;
-                return;
-            }
+            const cleanHostname = getCleanDomain();
+            
+            const isPremiumDomain = cleanHostname !== 'localhost' 
+                                 && cleanHostname !== '127.0.0.1' 
+                                 && !cleanHostname.endsWith('netlify.app')
+                                 && !cleanHostname.endsWith('netlify.com');
 
             try {
-                let query = supabase.from('tiendas').select('id, slug');
+                let data = null;
 
-                // 2. LLAVE CAMALEÓNICA (Número vs Slug)
-                if (/^\d+$/.test(parametroTienda)) {
-                    query = query.eq('id', parseInt(parametroTienda));
+                if (isPremiumDomain) {
+                    // FASE 1 ESTRICTA: Dominio Propio
+                    const res = await supabase.from('tiendas').select('id, slug').ilike('dominio_personal', cleanHostname).maybeSingle();
+                    
+                    if (res.error) throw new Error(res.error.message);
+                    
+                    if (!res.data) {
+                        document.body.innerHTML = `
+                            <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">🚫</div>
+                                <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Acceso Denegado</h2>
+                                <p style="color: #d1d5db;">El dominio no está asignado a ninguna tienda en el sistema.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    data = res.data;
+
                 } else {
-                    query = query.eq('slug', parametroTienda);
+                    // FASE 2: Dominio Genérico de Netlify
+                    if (!parametroTienda || parametroTienda.trim() === '') {
+                        document.body.innerHTML = `
+                            <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">🚫</div>
+                                <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Acceso Denegado</h2>
+                                <p style="color: #d1d5db;">No se especificó ninguna tienda en el enlace.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    let query = supabase.from('tiendas').select('id, slug');
+                    if (/^\d+$/.test(parametroTienda)) {
+                        query = query.eq('id', parseInt(parametroTienda));
+                    } else {
+                        query = query.eq('slug', parametroTienda);
+                    }
+
+                    const res = await query.single();
+
+                    if (res.error || !res.data) {
+                        document.body.innerHTML = `
+                            <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">🚫</div>
+                                <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Tienda no encontrada</h2>
+                                <p style="color: #d1d5db;">El enlace es incorrecto o la tienda solicitada no existe.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    data = res.data;
+
+                    // Ocultamiento de ID por Slug en Netlify
+                    if (data.slug && parametroTienda !== data.slug) {
+                        window.history.replaceState(null, '', `${window.location.pathname}?tienda=${data.slug}`);
+                    }
                 }
 
-                const { data, error } = await query.single();
-
-                if (error || !data) {
-                    document.body.innerHTML = `
-                        <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
-                            <div style="font-size: 4rem; margin-bottom: 1rem;">🚫</div>
-                            <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Tienda no encontrada</h2>
-                            <p style="color: #d1d5db;">El enlace es incorrecto o la tienda no existe.</p>
-                        </div>
-                    `;
-                    return;
-                }
-
-                // 3. ASIGNACIÓN GLOBAL
+                // 3. ASIGNACIÓN GLOBAL DE TIENDA
                 TIENDA_ID = data.id;
                 TIENDA_SLUG = data.slug || data.id;
 
-                // 4. MAGIA: REEMPLAZO SILENCIOSO DE ID POR SLUG
-                if (data.slug && parametroTienda !== data.slug) {
-                    window.history.replaceState(null, '', `${window.location.pathname}?tienda=${data.slug}`);
-                }
-
-                // 5. ARRANCAR APLICACIÓN
+                // 4. ARRANCAR APLICACIÓN
                 const root = ReactDOM.createRoot(document.getElementById('root'));
                 root.render(<App />);
 

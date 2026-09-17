@@ -1,6 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+    <!-- ========================================== -->
+    <!-- AUTO-ACTUALIZADOR: BLOQUEO DE CACHÉ BÁSICO -->
+    <!-- ========================================== -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ADMIN SAAS | Panel de Control</title>
@@ -12,6 +19,28 @@
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7/babel.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+
+    <!-- ========================================== -->
+    <!-- AUTO-ACTUALIZADOR: RECARGA SILENCIOSA (SW) -->
+    <!-- ========================================== -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then((registration) => {
+                    registration.update();
+                    registration.onupdatefound = () => {
+                        const installingWorker = registration.installing;
+                        installingWorker.onstatechange = () => {
+                            if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                                console.log("🔥 Nueva versión de Admin detectada. Recargando...");
+                                window.location.reload(true);
+                            }
+                        };
+                    };
+                }).catch(err => console.log('Error SW Admin:', err));
+            });
+        }
+    </script>
 
     <style>
         body { 
@@ -64,12 +93,14 @@
 <body>
     <div id="root"></div>
 
-    <script type="text/babel" data-type="module" data-presets="react">
+    <script type="text/babel" data-type="module" data-presets="react" id="app-admin-v4">
         const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
         // GLOBALES (Inyectadas por el Interceptor)
         let TIENDA_ID = null;
         let TIENDA_SLUG = null;
+        let IS_PREMIUM_DOMAIN = false;
+        let CLEAN_HOSTNAME = "";
 
         const SUPABASE_URL = 'https://srhdgocsmswxidrwguhc.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_pWKDoEBfP3l2ggqYh_l7IA_SNq1Esfz';
@@ -865,7 +896,6 @@
             const processedInventory = useMemo(() => {
                 if (!categories.length) return [];
                 
-                // Si hay búsqueda activa, ignoramos la categoria seleccionada y buscamos en todo
                 if (search.trim() !== '') {
                     const searchLower = search.toLowerCase();
                     return categories.map(cat => {
@@ -875,7 +905,6 @@
                     }).filter(c => c.items.length > 0);
                 }
                 
-                // Si NO hay búsqueda, filtramos por la categoria activa
                 if (activeCat === 'Todas') {
                     return categories.map(cat => {
                         let items = products.filter(p => p.categoria_id === cat.id);
@@ -923,8 +952,12 @@
             if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900"><div className="loader"></div></div>;
 
             const safeTiers = configForm && Array.isArray(configForm.delivery_tiers) ? configForm.delivery_tiers : [];
-            const URL_PRODUCCION = 'https://menus-delivery.netlify.app/menus.html';
             const identificador = tienda?.slug || TIENDA_ID;
+            
+            // GENERADOR INTELIGENTE DE QR: Usa tu dominio Premium si estás conectado ahí
+            const linkMenuQR = IS_PREMIUM_DOMAIN 
+                ? `https://${CLEAN_HOSTNAME}/menus.html` 
+                : `https://menus-delivery.netlify.app/menus.html?tienda=${identificador}`;
 
             return (
                 <div className="pb-20">
@@ -1094,7 +1127,6 @@
                     {view === 'inventory' && (
                         <div className="p-4 animate-card max-w-4xl mx-auto w-full">
                             
-                            {/* NUEVA BARRA DE HERRAMIENTAS (Buscador + Botones) */}
                             <div className="sticky top-[130px] z-40 bg-gray-900/95 backdrop-blur py-3 -mx-4 px-4 border-b border-gray-800 flex flex-col gap-3">
                                 
                                 <div className="flex gap-2">
@@ -1248,7 +1280,7 @@
                                     <p className="text-gray-400 text-xs mb-4">Descarga este código para imprimirlo y ponerlo en las mesas de tu establecimiento.</p>
                                     <div className="bg-white p-4 rounded-2xl shadow-inner inline-block mb-4">
                                         <img 
-                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(URL_PRODUCCION + '?tienda=' + identificador)}`} 
+                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(linkMenuQR)}`} 
                                             alt="QR Code Menú" 
                                             className="w-48 h-48 object-contain mx-auto"
                                         />
@@ -1256,7 +1288,7 @@
                                     <div>
                                         <button 
                                             type="button"
-                                            onClick={() => window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(URL_PRODUCCION + '?tienda=' + identificador)}`, '_blank')} 
+                                            onClick={() => window.open(`https://api.qrserver.com/v1/create-qr-code/?size=1200x1200&data=${encodeURIComponent(linkMenuQR)}`, '_blank')} 
                                             className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-sm font-bold shadow-lg transition-all active:scale-95"
                                         >
                                             📥 DESCARGAR QR EN ALTA CALIDAD
@@ -1315,56 +1347,92 @@
         };
 
         // ==========================================
-        // ARRANQUE Y CANDADO MAESTRO (ADMIN)
+        // ARRANQUE Y CANDADO MAESTRO (ACTUALIZADO)
         // ==========================================
         const initApp = async () => {
             const parametroTienda = new URLSearchParams(window.location.search).get('tienda');
 
-            // 1. FILTRO: Acceso denegado si no hay parámetro
-            if (!parametroTienda || parametroTienda.trim() === '') {
-                document.body.innerHTML = `
-                    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
-                        <div style="font-size: 4rem; margin-bottom: 1rem;">🛑</div>
-                        <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Acceso Denegado</h2>
-                        <p style="color: #d1d5db;">No se especificó ninguna tienda en el enlace.</p>
-                    </div>
-                `;
-                return;
-            }
+            const getCleanDomain = () => {
+                let hostname = window.location.hostname;
+                hostname = hostname.replace(/^www\./, ''); 
+                hostname = hostname.split(':')[0]; 
+                return hostname.trim().toLowerCase(); 
+            };
+
+            CLEAN_HOSTNAME = getCleanDomain();
+            
+            const isPremiumDomain = CLEAN_HOSTNAME !== 'localhost' 
+                                 && CLEAN_HOSTNAME !== '127.0.0.1' 
+                                 && !CLEAN_HOSTNAME.endsWith('netlify.app')
+                                 && !CLEAN_HOSTNAME.endsWith('netlify.com');
+
+            IS_PREMIUM_DOMAIN = isPremiumDomain;
 
             try {
-                let query = supabase.from('tiendas').select('id, slug');
+                let data = null;
 
-                // 2. LLAVE CAMALEÓNICA
-                if (/^\d+$/.test(parametroTienda)) {
-                    query = query.eq('id', parseInt(parametroTienda));
+                if (isPremiumDomain) {
+                    // FASE 1 ESTRICTA: Dominio Propio
+                    const res = await supabase.from('tiendas').select('id, slug').ilike('dominio_personal', CLEAN_HOSTNAME).maybeSingle();
+                    
+                    if (res.error) throw new Error(res.error.message);
+                    
+                    if (!res.data) {
+                        document.body.innerHTML = `
+                            <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">🛑</div>
+                                <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Acceso Denegado</h2>
+                                <p style="color: #d1d5db;">El dominio no está asignado a ninguna tienda en el sistema.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    data = res.data;
+
                 } else {
-                    query = query.eq('slug', parametroTienda);
-                }
+                    // FASE 2: Dominio Genérico de Netlify
+                    if (!parametroTienda || parametroTienda.trim() === '') {
+                        document.body.innerHTML = `
+                            <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">🛑</div>
+                                <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Acceso Denegado</h2>
+                                <p style="color: #d1d5db;">No se especificó ninguna tienda en el enlace.</p>
+                            </div>
+                        `;
+                        return;
+                    }
 
-                const { data, error } = await query.single();
+                    let query = supabase.from('tiendas').select('id, slug');
+                    if (/^\d+$/.test(parametroTienda)) {
+                        query = query.eq('id', parseInt(parametroTienda));
+                    } else {
+                        query = query.eq('slug', parametroTienda);
+                    }
 
-                if (error || !data) {
-                    document.body.innerHTML = `
-                        <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
-                            <div style="font-size: 4rem; margin-bottom: 1rem;">🛑</div>
-                            <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Tienda no encontrada</h2>
-                            <p style="color: #d1d5db;">El enlace es incorrecto o la tienda no existe.</p>
-                        </div>
-                    `;
-                    return;
+                    const res = await query.single();
+
+                    if (res.error || !res.data) {
+                        document.body.innerHTML = `
+                            <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100vh; background:#111827; color:white; font-family:sans-serif; text-align:center; padding:20px;">
+                                <div style="font-size: 4rem; margin-bottom: 1rem;">🛑</div>
+                                <h2 style="font-size: 1.5rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">Tienda no encontrada</h2>
+                                <p style="color: #d1d5db;">El enlace es incorrecto o la tienda no existe.</p>
+                            </div>
+                        `;
+                        return;
+                    }
+                    data = res.data;
+
+                    if (data.slug && parametroTienda !== data.slug) {
+                        window.history.replaceState(null, '', `${window.location.pathname}?tienda=${data.slug}`);
+                    }
                 }
 
                 // 3. ASIGNACIÓN GLOBAL PARA EL ADMIN
                 TIENDA_ID = data.id;
                 TIENDA_SLUG = data.slug || data.id;
 
-                // 4. MAGIA: REEMPLAZO SILENCIOSO POR SLUG
-                if (data.slug && parametroTienda !== data.slug) {
-                    window.history.replaceState(null, '', `${window.location.pathname}?tienda=${data.slug}`);
-                }
-
-                // 5. ARRANCAR APLICACIÓN ADMIN
+                // 4. ARRANCAR APLICACIÓN ADMIN
                 const root = ReactDOM.createRoot(document.getElementById('root'));
                 root.render(<App />);
 
