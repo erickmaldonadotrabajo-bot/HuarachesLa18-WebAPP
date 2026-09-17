@@ -14,7 +14,11 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-    <title>Cargando Restaurante...</title>
+    <title>Menú Digital</title>
+    
+    <!-- ÍCONOS COMODÍN (Fallback por si el celular es muy rápido) -->
+    <link rel="icon" id="favicon" href="https://cdn-icons-png.flaticon.com/512/900/900797.png">
+    <link rel="apple-touch-icon" id="apple-icon" href="https://cdn-icons-png.flaticon.com/512/900/900797.png">
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
@@ -70,7 +74,7 @@
 
     <div id="root" class="w-full flex items-center justify-center relative z-10"></div>
 
-    <script type="text/babel" data-type="module" data-presets="react" id="app-v5">
+    <script type="text/babel" data-type="module" data-presets="react" id="app-v6">
         const { useState, useEffect } = React;
 
         // 1. CAPTURA DEL ENTORNO (Detectar el Dominio)
@@ -129,17 +133,45 @@
 
                         // APLICACIÓN DE DATOS AL ENTORNO VISUAL
                         setTienda(data);
-                        document.title = `${data.nombre} | Bienvenidos`;
+                        document.title = data.nombre;
                         
                         if (data.color_primario) document.documentElement.style.setProperty('--color-primary', data.color_primario);
                         if (data.color_fondo) document.documentElement.style.setProperty('--color-bg', data.color_fondo);
                         
-                        // INYECCIÓN DINÁMICA DE FAVICON PARA ACCESO DIRECTO
-                        document.querySelectorAll("link[rel='icon'], link[rel='apple-touch-icon'], meta[name='apple-mobile-web-app-title']").forEach(el => el.remove());
+                        // =========================================================
+                        // GENERADOR DE APP MANIFEST (PWA) Y REEMPLAZO DE ÍCONOS
+                        // =========================================================
                         if (data.logo_url) {
-                            const favicon = document.createElement('link'); favicon.rel = 'icon'; favicon.href = data.logo_url; document.head.appendChild(favicon);
-                            const appleIcon = document.createElement('link'); appleIcon.rel = 'apple-touch-icon'; appleIcon.href = data.logo_url; document.head.appendChild(appleIcon);
-                            const titleMeta = document.createElement('meta'); titleMeta.name = 'apple-mobile-web-app-title'; titleMeta.content = data.nombre; document.head.appendChild(titleMeta);
+                            // 1. Reemplazar los íconos comodín
+                            document.getElementById('favicon').href = data.logo_url;
+                            document.getElementById('apple-icon').href = data.logo_url;
+                            
+                            // 2. Título nativo para iOS
+                            const titleMeta = document.createElement('meta'); 
+                            titleMeta.name = 'apple-mobile-web-app-title'; 
+                            titleMeta.content = data.nombre; 
+                            document.head.appendChild(titleMeta);
+
+                            // 3. Crear el manifest.json en vivo
+                            const manifestJSON = {
+                                "name": data.nombre,
+                                "short_name": data.nombre,
+                                "start_url": window.location.href,
+                                "display": "standalone",
+                                "background_color": data.color_fondo || "#111827",
+                                "theme_color": data.color_primario || "#f97316",
+                                "icons": [
+                                    { "src": data.logo_url, "sizes": "192x192", "type": "image/png" }, 
+                                    { "src": data.logo_url, "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+                                ]
+                            };
+                            
+                            // 4. Inyectarlo en la cabeza del documento
+                            const manifestBlob = new Blob([JSON.stringify(manifestJSON)], { type: 'application/json' });
+                            const manifestLink = document.createElement('link');
+                            manifestLink.rel = 'manifest';
+                            manifestLink.href = URL.createObjectURL(manifestBlob);
+                            document.head.appendChild(manifestLink);
                         }
 
                     } catch (err) {
