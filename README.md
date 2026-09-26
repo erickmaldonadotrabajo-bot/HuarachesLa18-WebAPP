@@ -43,7 +43,4 @@ soportando múltiples inquilinos con seguridad de nivel fila (RLS).
 
 - **Frontend:** React 18, Vite, React Router DOM, TailwindCSS
 - **Backend & DB:** Supabase (PostgreSQL, Auth, Storage)
-- **Despliegue:** Netlify
-
----[https://github.com/tu-usuario/tu-repo.git](https://github.com/tu-usuario/tu-repo.git)
-   cd tu-repo
+- **Despliegue:** Netlify : https://menus-delivery.netlify.app/home?tienda=PRUEBAS
