@@ -34,7 +34,7 @@ const getCleanDomain = () => {
     return hostname.trim().toLowerCase(); 
 };
 
-// COMPONENTES SECUNDARIOS
+// COMPONENTES SECUNDARIOS (sin cambios)
 const Ticket = ({ order, tienda }) => {
     if (!order || !tienda) return null;
     const date = new Date(order.created_at).toLocaleString('es-MX');
@@ -105,12 +105,8 @@ const OrderCard = ({ order, tienda, onComplete, onPrint, onCancel }) => {
     const handleComplete = () => { if(confirm("¿PEDIDO DESPACHADO?")) onComplete(order.id); };
     
     const handleCancelClick = () => {
-        const pin = prompt("Introduce el PIN de administrador para cancelar este pedido:");
-        if (pin === null) return; 
-        if (pin === (tienda.admin_pin || '1234')) {
+        if (confirm("¿Seguro que quieres CANCELAR este pedido?")) {
             onCancel(order.id);
-        } else {
-            alert("PIN incorrecto. Operacion cancelada.");
         }
     };
 
@@ -464,8 +460,10 @@ export default function Admin() {
     const [tiendaError, setTiendaError] = useState(null);
     const [tiendaId, setTiendaId] = useState(null);
 
+    // 🔐 Auth real con Supabase (reemplaza el PIN)
     const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [pinInput, setPinInput] = useState('');
+    const [email, setEmail] = useState('');
+    const [password, setPassword] = useState('');
     const [loginError, setLoginError] = useState(false);
 
     const [view, setView] = useState('orders');
@@ -524,7 +522,7 @@ export default function Admin() {
         return () => document.head.removeChild(style);
     }, []);
 
-    // 1. Resolver Tienda ID y Seguridad de Carga
+    // 1. Resolver Tienda ID y verificar si ya hay sesión activa de Supabase Auth con permiso
     useEffect(() => {
         const resolveTienda = async () => {
             try {
@@ -543,13 +541,21 @@ export default function Admin() {
                     data = resData;
                 }
                 setTiendaId(data.id);
-                
-                // Auth Check seguro
-                if (localStorage.getItem(`admin_auth_${data.id}`) === 'true') {
-                    setIsAuthenticated(true);
-                } else {
-                    setLoading(false); // Detiene la carga y muestra el panel de PIN
+
+                // Si ya hay una sesión de Supabase Auth activa, verificamos que tenga permiso sobre esta tienda
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session?.user) {
+                    const { data: perfil } = await supabase
+                        .from('perfiles')
+                        .select('rol, tienda_id')
+                        .eq('id', session.user.id)
+                        .single();
+
+                    if (perfil && (perfil.rol === 'superadmin' || perfil.tienda_id === data.id)) {
+                        setIsAuthenticated(true);
+                    }
                 }
+                setLoading(false);
             } catch (err) {
                 setTiendaError(err.message);
                 setLoading(false);
@@ -634,7 +640,6 @@ export default function Admin() {
             allStats.sort((a,b) => b.vendidos - a.vendidos);
 
             const top5 = allStats.slice(0, 5);
-            // Aplicado el filtro para evitar mostrar productos con 0 ventas en la sección de Menos Vendidos
             const bottom5 = [...allStats].filter(item => item.vendidos > 0).reverse().slice(0, 5); 
 
             setStats({ ventas: totalVentas, cancelados: totalCancelados, top5: top5, bottom5: bottom5 });
@@ -688,34 +693,53 @@ export default function Admin() {
 
     const acknowledgeNewOrder = () => { setHasNewOrder(false); alertSound.pause(); alertSound.currentTime = 0; };
 
-    // Manejo de Login con estado de carga corregido
+    // 🔐 Login real con Supabase Auth + verificación de permiso sobre la tienda actual
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoginError(false);
         setLoading(true);
-        
-        const { data, error } = await supabase.from('tiendas').select('admin_pin').eq('id', tiendaId).single();
-        
-        if (error || !data) { 
-            setLoginError(true); 
+
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password: password
+        });
+
+        if (authError || !authData.user) {
+            setLoginError(true);
             setLoading(false);
-            return; 
+            return;
         }
 
-        const correctPin = data.admin_pin || '1234';
-        if (pinInput === correctPin) {
-            setIsAuthenticated(true);
-            localStorage.setItem(`admin_auth_${tiendaId}`, 'true');
-        } else { 
-            setLoginError(true); 
+        const { data: perfil, error: perfilError } = await supabase
+            .from('perfiles')
+            .select('rol, tienda_id')
+            .eq('id', authData.user.id)
+            .single();
+
+        if (perfilError || !perfil) {
+            setLoginError(true);
             setLoading(false);
+            await supabase.auth.signOut();
+            return;
         }
+
+        const tienePermiso = perfil.rol === 'superadmin' || perfil.tienda_id === tiendaId;
+
+        if (!tienePermiso) {
+            setLoginError(true);
+            setLoading(false);
+            await supabase.auth.signOut();
+            return;
+        }
+
+        setIsAuthenticated(true);
     };
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
         setIsAuthenticated(false);
-        localStorage.removeItem(`admin_auth_${tiendaId}`);
-        setPinInput('');
+        setEmail('');
+        setPassword('');
     };
 
     const handleLogoUpload = async (e) => {
@@ -792,8 +816,6 @@ export default function Admin() {
             max_delivery_radius: parseFloat(configForm.max_delivery_radius),
             delivery_tiers: Array.isArray(configForm.delivery_tiers) ? configForm.delivery_tiers : []
         };
-
-        if (configForm.admin_pin && configForm.admin_pin.trim() !== '') { updateData.admin_pin = configForm.admin_pin.trim(); }
 
         try {
             const { error } = await supabase.from('tiendas').update(updateData).eq('id', tiendaId);
@@ -940,17 +962,18 @@ export default function Admin() {
     );
     if (loading) return <div className="min-h-screen flex items-center justify-center bg-gray-900"><div className="loader"></div></div>;
 
-    // PANTALLA LOGIN
+    // 🔐 PANTALLA LOGIN (email + contraseña real de Supabase Auth)
     if (!isAuthenticated) {
         return (
             <div className="min-h-screen flex items-center justify-center p-4 bg-gray-950 text-white">
                 <div className="bg-gray-900 border border-gray-800 p-8 rounded-3xl max-w-md w-full shadow-2xl text-center animate-card">
                     <div className="w-16 h-16 bg-orange-600/20 text-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-orange-600/30"><Icons.Lock /></div>
                     <h1 className="text-2xl font-black tracking-wide mb-2">Panel Administrativo</h1>
-                    <p className="text-gray-400 text-sm mb-6">Ingresa la contraseña de la tienda</p>
+                    <p className="text-gray-400 text-sm mb-6">Ingresa con tu correo y contraseña</p>
                     <form onSubmit={handleLogin} className="space-y-4">
-                        <input type="password" required placeholder="Contraseña PIN (ej. 1234)" value={pinInput} onChange={e => setPinInput(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded-xl p-4 text-white text-center text-xl tracking-widest outline-none focus:border-orange-500 shadow-inner" disabled={loading} />
-                        {loginError && <p className="text-red-500 text-xs font-bold">Contraseña incorrecta. Intenta de nuevo.</p>}
+                        <input type="email" required placeholder="Correo electrónico" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded-xl p-4 text-white text-center outline-none focus:border-orange-500 shadow-inner" disabled={loading} />
+                        <input type="password" required placeholder="Contraseña" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-gray-950 border border-gray-700 rounded-xl p-4 text-white text-center outline-none focus:border-orange-500 shadow-inner" disabled={loading} />
+                        {loginError && <p className="text-red-500 text-xs font-bold">Correo o contraseña incorrectos, o no tienes acceso a esta tienda.</p>}
                         <button type="submit" disabled={loading} className="w-full bg-orange-600 hover:bg-orange-500 font-bold py-4 rounded-xl shadow-lg transition-all text-lg active:scale-95 disabled:opacity-50">INGRESAR AL PANEL</button>
                     </form>
                 </div>
@@ -1252,16 +1275,6 @@ export default function Admin() {
                                     <input type="text" placeholder="ej: www.mirestaurante.com" value={configForm.dominio_personal || ''} onChange={e=>setConfigForm({...configForm, dominio_personal: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 outline-none focus:border-orange-500" />
                                     <p className="text-[11px] text-gray-500 mt-1">Solo llénalo si has conectado un dominio propio con nosotros.</p>
                                 </div>
-                            </div>
-                        </div>
-
-                        {/* PIN */}
-                        <div className="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-lg mb-6 w-full overflow-hidden">
-                            <h3 className="text-orange-400 font-bold mb-4 uppercase tracking-widest text-sm border-b border-gray-700 pb-2">Seguridad del Panel</h3>
-                            <div>
-                                <label className="block text-gray-400 text-xs mb-1">Nueva Contraseña (PIN)</label>
-                                <input type="text" placeholder="Dejar en blanco para mantener la actual" value={configForm.admin_pin || ''} onChange={e=>setConfigForm({...configForm, admin_pin: e.target.value})} className="w-full bg-gray-900 border border-gray-600 rounded-lg p-3 outline-none focus:border-orange-500 font-mono" />
-                                <p className="text-[11px] text-gray-500 mt-1">Usa este PIN la próxima vez que ingreses al panel administrativo.</p>
                             </div>
                         </div>
 
