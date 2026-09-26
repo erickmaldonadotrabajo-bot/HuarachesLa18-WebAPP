@@ -15,7 +15,8 @@ const isPremiumDomain = () => {
     cleanHostname !== 'localhost' &&
     cleanHostname !== '127.0.0.1' &&
     !cleanHostname.endsWith('netlify.app') &&
-    !cleanHostname.endsWith('netlify.com')
+    !cleanHostname.endsWith('netlify.com') &&
+    !cleanHostname.endsWith('vercel.app')
   );
 };
 
