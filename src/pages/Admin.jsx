@@ -458,7 +458,8 @@ export default function Admin() {
     const isPremiumDomain = cleanHostname !== 'localhost' 
                          && cleanHostname !== '127.0.0.1' 
                          && !cleanHostname.endsWith('netlify.app')
-                         && !cleanHostname.endsWith('netlify.com');
+                         && !cleanHostname.endsWith('netlify.com')
+                         && !cleanHostname.endsWith('vercel.app');
 
     const [tiendaError, setTiendaError] = useState(null);
     const [tiendaId, setTiendaId] = useState(null);
